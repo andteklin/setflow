@@ -1031,6 +1031,7 @@ Possible future integrations include:
 - WorshipTools interoperability
 - Planning Center interoperability
 - PRIME/MIDI integration
+- MIDI integration with WorshipTools (map midi cues to sections)
 - CCLI reporting where legally and technically supported
 
 SetFlow's core architecture must not depend on any of these integrations.
