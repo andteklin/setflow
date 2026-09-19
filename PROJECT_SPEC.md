@@ -2,25 +2,45 @@
 
 ## 1. Project Overview
 
-**SetFlow** is a local-first worship chart and music-director application designed to turn structured ChordPro songs and programmed song maps into readable, synchronized charts for musicians and stage displays.
+**SetFlow** is a local-first worship chart and music-director application that converts ChordPro songs into programmable, chronological performance charts.
 
-The core problem SetFlow solves is that traditional chord charts define the sections of a song but do not necessarily display those sections in the chronological order in which they will be performed.
+SetFlow separates two concepts that are commonly combined in static worship charts:
 
-For example, a song may contain:
+1. **Song content** — the reusable musical sections of a song.
+2. **Song arrangement** — the order in which those sections are performed.
 
-- Verse 1
-- Verse 2
-- Chorus
-- Bridge
-- Tag
+A source chart may contain:
 
-while the actual arrangement is:
+```text
+Intro
+Verse 1
+Chorus 1a
+Instrumental
+Verse 2
+Chorus 1b
+Bridge
+Chorus 1c
+Chorus 1d
+Ending
+```
 
-`Intro → Verse 1 → Chorus → Verse 2 → Chorus → Bridge ×4 → Chorus ×2 → Tag`
+SetFlow imports and identifies these sections, after which the user can construct an arrangement such as:
 
-SetFlow should allow each musical section to be defined **once**, define the performance order separately as a **Song Map**, and automatically generate the performance chart from that map.
+```text
+Intro → Verse 1 → Chorus 1a → Instrumental →
+Verse 2 → Chorus 1b → Bridge → Chorus 1c →
+Chorus 1d → Ending
+```
 
-SetFlow must also operate entirely over a local network without requiring Internet access. This allows it to function reliably at retreats, conferences, outdoor events, and other locations with poor or nonexistent Internet connectivity.
+For songs whose repeated sections are identical, SetFlow should also support reuse:
+
+```text
+V1 → C → V2 → C → B → C×2 → Ending
+```
+
+SetFlow then renders the resulting arrangement for stage displays and individual musician devices.
+
+All live-performance functionality must operate over a local network without Internet access.
 
 ---
 
@@ -28,15 +48,11 @@ SetFlow must also operate entirely over a local network without requiring Intern
 
 ## 2.1 Local First
 
-All functionality required during a live performance must work without Internet access.
-
-The cloud must never be required in the live control path.
-
-A typical deployment should function as:
+Internet connectivity must never be required during a live performance.
 
 ```text
                      LOCAL ROUTER
-                    (WAN optional)
+                     WAN OPTIONAL
                           |
              +------------+------------+
              |            |            |
@@ -50,453 +66,778 @@ A typical deployment should function as:
       TV 1  TV 2  TV 3
 ```
 
-Internet connectivity may be used for optional importing, synchronization, backup, or integrations, but loss of WAN connectivity must not interrupt an active SetFlow session.
+Optional cloud integrations may exist in the future, but loss of Internet connectivity must not interrupt an active SetFlow session.
 
-## 2.2 Single Source of Truth
+## 2.2 Preserve the Original ChordPro
 
-Each song should contain one authoritative definition of its musical sections.
+Imported ChordPro must be retained in its original form whenever practical.
 
-Repeated sections should not require duplicated ChordPro content.
+SetFlow should not destructively rewrite a SongSelect chart simply because it creates an internal structured representation.
+
+The application therefore maintains:
+
+```text
+Original ChordPro
+       ↓
+     Parser
+       ↓
+Normalized SetFlow Song Model
+       ↓
+Section / Arrangement Engine
+       ↓
+Renderer
+```
+
+The original source remains available for editing, export, debugging, and reparsing.
+
+## 2.3 Separate Content from Arrangement
+
+The source chart defines musical content.
+
+A SetFlow Arrangement defines performance order.
+
+Multiple arrangements may reference the same song.
+
+## 2.4 One Application, Multiple Views
+
+SetFlow is one application with a shared data model and at least three interfaces:
+
+- **Control View**
+- **Stage View**
+- **Musician View**
+
+---
+
+# 3. Real-World ChordPro Compatibility
+
+SetFlow must prioritize compatibility with ChordPro files produced by common worship-music sources rather than requiring perfectly semantic ChordPro.
+
+A typical SongSelect import may resemble:
+
+```chordpro
+{title: Because He Lives (Amen)}
+{artist: Chris Tomlin, Daniel Carson, Ed Cash, ...}
+{key: C}
+{time: 4/4}
+{tempo: 84}
+{ccli_license: 11488782}
+{ccli: 7027887}
+{copyright: ...}
+{footer: ...}
+
+{comment: Intro}
+[|] [Am]    [F]    [|] [C]    [|]
+
+{comment: Verse 1}
+I be - [Am]lieve in the [F]Son, [C] ...
+
+{comment: Chorus 1a}
+A - [F]men, [G]a [Am]- men
+...
+
+{comment: Instrumental}
+[|] [Am]    [F]    [|] [C]    [|]
+
+{comment: Verse 2}
+...
+
+{comment: Bridge}
+...
+
+{comment: Ending}
+Because He [Am]lives [F] [C]
+```
+
+SetFlow must correctly interpret this style of file.
+
+---
+
+# 4. Metadata Parsing
+
+SetFlow should recognize common metadata directives including:
+
+```text
+{title: ...}
+{artist: ...}
+{key: ...}
+{time: ...}
+{tempo: ...}
+{ccli: ...}
+{ccli_license: ...}
+{copyright: ...}
+{footer: ...}
+```
+
+Unknown metadata directives must not cause import failure.
+
+Unknown directives should preferably be preserved so that importing and subsequently exporting a chart does not unnecessarily destroy information.
+
+Internally, common metadata should map to structured fields:
+
+```typescript
+interface SongMetadata {
+  title: string;
+  artist?: string;
+  originalKey?: string;
+  timeSignature?: string;
+  tempo?: number;
+  ccliNumber?: string;
+  ccliLicense?: string;
+  copyright?: string;
+  footer?: string;
+}
+```
+
+---
+
+# 5. Section Detection
+
+## 5.1 Comment-Based Sections
+
+SetFlow must support section boundaries expressed using `{comment: ...}`.
+
+For SongSelect-style charts:
+
+```chordpro
+{comment: Verse 1}
+...
+
+{comment: Chorus 1a}
+...
+
+{comment: Bridge}
+...
+```
+
+each recognized structural comment begins a new musical section.
+
+The section continues until:
+
+- another structural section marker occurs, or
+- the song ends.
+
+## 5.2 Semantic Section Directives
+
+SetFlow should additionally support standard semantic ChordPro structures where available, such as verse, chorus, bridge, or custom environment directives.
+
+Semantic directives should take precedence over heuristic comment detection where the source explicitly supplies them.
+
+## 5.3 Section Recognition
+
+Section names should be normalized when possible.
+
+Examples:
+
+| Source Label | Type | Normalized Label |
+|---|---|---|
+| `Intro` | intro | `I` |
+| `Verse 1` | verse | `V1` |
+| `Verse 2` | verse | `V2` |
+| `Pre-Chorus` | prechorus | `PC` |
+| `Chorus` | chorus | `C` |
+| `Chorus 1a` | chorus | `C1A` |
+| `Chorus 1b` | chorus | `C1B` |
+| `Bridge` | bridge | `B` |
+| `Bridge 2` | bridge | `B2` |
+| `Instrumental` | instrumental | `INST` |
+| `Interlude` | interlude | `INT` |
+| `Tag` | tag | `T` |
+| `Ending` | ending | `E` |
+| `Outro` | outro | `O` |
+
+The **original label must always be preserved**.
+
+Normalization exists for SetFlow logic and compact UI presentation; it must not destroy the source label.
+
+## 5.4 Unknown Section Names
+
+SetFlow must not require sections to use a predefined vocabulary.
+
+For example:
+
+```chordpro
+{comment: Breakdown}
+```
+
+or:
+
+```chordpro
+{comment: Big Chorus}
+```
+
+must remain valid.
+
+SetFlow should classify these as `custom` if it cannot confidently infer another type.
+
+The user should be able to correct the classification manually.
+
+---
+
+# 6. Comments vs. Section Markers
+
+Not every `{comment: ...}` directive necessarily represents a musical section.
+
+For example:
+
+```chordpro
+{comment: Verse 1}
+```
+
+clearly indicates structure.
+
+But a chart could also contain:
+
+```chordpro
+{comment: Build here}
+```
+
+or:
+
+```chordpro
+{comment: Acoustic guitar only}
+```
+
+which may be performance notes rather than sections.
+
+SetFlow should therefore classify comments rather than blindly treating every comment as a section.
+
+Suggested detection strategy:
+
+1. Match common section names.
+2. Recognize numbered/lettered variants.
+3. Use surrounding position/content as secondary context.
+4. If uncertain, preserve the comment as an annotation.
+5. Allow the user to manually convert an annotation into a section.
+
+The importer should prioritize **not losing information** over aggressive normalization.
+
+---
+
+# 7. Section Model
+
+A SetFlow section should contain:
+
+```typescript
+interface SongSection {
+  id: string;
+
+  // Source identity
+  sourceLabel: string;
+
+  // Normalized SetFlow representation
+  label: string;
+  type:
+    | "intro"
+    | "verse"
+    | "prechorus"
+    | "chorus"
+    | "bridge"
+    | "instrumental"
+    | "interlude"
+    | "tag"
+    | "ending"
+    | "outro"
+    | "custom";
+
+  lines: ChartLine[];
+
+  sourceOrder: number;
+}
+```
+
+For the supplied SongSelect example, parsing should produce approximately:
+
+```text
+Song: Because He Lives (Amen)
+
+Sections
+──────────────────────
+I       Intro
+V1      Verse 1
+C1A     Chorus 1a
+INST    Instrumental
+V2      Verse 2
+C1B     Chorus 1b
+B       Bridge
+C1C     Chorus 1c
+C1D     Chorus 1d
+E       Ending
+```
+
+---
+
+# 8. Important: Similar Sections Are Not Necessarily Identical
+
+SetFlow must **not automatically merge sections simply because their names are similar**.
+
+For example, the supplied chart contains:
+
+```text
+Chorus 1a
+Chorus 1b
+Chorus 1c
+Chorus 1d
+```
+
+These sections contain subtle differences in chords and lyrics.
+
+Therefore:
+
+```text
+C1A ≠ C1B ≠ C1C ≠ C1D
+```
+
+unless the user explicitly chooses to link or consolidate them.
+
+This is critical.
+
+SetFlow must never assume:
+
+```text
+"Chorus 1a"
+"Chorus 1b"
+"Chorus 1c"
+```
+
+are merely repeated instances of one Chorus.
+
+---
+
+# 9. Optional Section Linking
+
+SetFlow may allow the user to identify sections that should share content.
 
 For example:
 
 ```text
-Verse 1
-Chorus
-Verse 2
-Bridge
-Tag
+Chorus A
+Chorus B
 ```
 
-plus:
+could optionally be consolidated if the user determines they are musically identical.
 
-```text
-Song Map:
-V1 → C → V2 → C → B → B → C → Tag
-```
+This should be an explicit operation such as:
 
-should generate the complete performance sequence automatically.
+**Link Sections**
 
-Changing the Chorus definition must update **every occurrence of the Chorus**.
+or:
 
-## 2.3 Separate Content from Arrangement
+**Use Same Content As...**
 
-SetFlow must distinguish between:
+SetFlow should show differences before allowing consolidation.
 
-**Song Content**
-- lyrics
-- chords
-- section names
-- metadata
-
-and:
-
-**Song Arrangement**
-- chronological section order
-- repeated sections
-- optional sections
-- arrangement-specific notes
-
-The same song content should be capable of supporting multiple arrangements.
-
-Example:
-
-```text
-Build My Life
-
-Arrangement: Standard
-I → V1 → C → V2 → C → B×2 → C → O
-
-Arrangement: Acoustic
-V1 → C → V2 → C → B → C
-```
-
-## 2.4 One Application, Multiple Views
-
-SetFlow should be implemented as one application with a shared data model and multiple interfaces.
-
-Required views:
-
-1. **Control View**
-2. **Stage View**
-3. **Musician View**
-
-Future versions may add a dedicated **MD View**.
+This feature is not required for the initial MVP.
 
 ---
 
-# 3. Primary Use Cases
+# 10. Default Imported Arrangement
 
-## 3.1 Normal Worship Service
+Upon importing a ChordPro file, SetFlow should automatically create an arrangement corresponding to **source order**.
 
-The operator:
-
-1. Opens SetFlow.
-2. Selects a setlist.
-3. Selects a song.
-4. Loads the desired arrangement.
-5. Outputs Stage View to a portrait external display.
-6. The external display is distributed to multiple stage TVs.
-
-## 3.2 Offline Event
-
-The host laptop and musician devices connect to a local router.
-
-No WAN connection is required.
-
-Musicians navigate to the SetFlow server using a local URL.
-
-Example:
+For the supplied example:
 
 ```text
-http://setflow.local
+Intro
+→ Verse 1
+→ Chorus 1a
+→ Instrumental
+→ Verse 2
+→ Chorus 1b
+→ Bridge
+→ Chorus 1c
+→ Chorus 1d
+→ Ending
 ```
 
-All charts and song data are served locally.
+This means a newly imported SongSelect chart is immediately usable even before the user creates a custom SetFlow arrangement.
 
-## 3.3 Rehearsal Chart Change
-
-During rehearsal, the MD notices an incorrect chord.
-
-The operator changes:
+Suggested default arrangement name:
 
 ```text
-[G]Great are You Lord
+Imported Arrangement
 ```
 
-to:
+or:
 
 ```text
-[G/B]Great are You Lord
+Source Order
 ```
-
-After saving:
-
-- Stage View updates.
-- Every occurrence of that section updates.
-- Connected Musician Views receive the new chart.
-- No Internet connection is required.
-
-## 3.4 Arrangement Change
-
-The worship leader changes:
-
-```text
-Bridge ×2
-```
-
-to:
-
-```text
-Bridge ×4
-```
-
-The operator modifies the Song Map.
-
-SetFlow immediately regenerates the performance sequence without requiring the Bridge content to be copied and pasted.
 
 ---
 
-# 4. Song Data Model
+# 11. Song Maps
 
-Each song should contain at minimum:
+A Song Map defines performance order independently from source order.
+
+For example:
 
 ```text
-Song
-├── ID
-├── Title
-├── Artist
-├── Original Key
-├── Current Key
-├── Tempo
-├── Time Signature
-├── ChordPro Source
-├── Sections
-└── Arrangements
+V1 → C1A → V2 → C1B → B → C1C → C1D → E
 ```
 
-Optional metadata may include:
-
-- CCLI number
-- BPM
-- duration
-- notes
-- tags
-- source
-- copyright information
-
----
-
-# 5. Section Model
-
-SetFlow should parse ChordPro into identifiable musical sections.
-
-Example source:
+or for another song:
 
 ```text
-{title: Build My Life}
-{key: G}
-
-{start_of_verse: Verse 1}
-[G]Worthy of every song
-We could ever [C]sing
-{end_of_verse}
-
-{start_of_chorus: Chorus}
-[C]Holy, there is no one like You
-[G]There is none beside You
-{end_of_chorus}
-
-{start_of_bridge: Bridge}
-[C]I will build my life
-[D]Upon Your love
-{end_of_bridge}
+V1 → C → V2 → C → B×4 → C×2 → T
 ```
 
-Internally:
+The arrangement model should reference section IDs rather than duplicate their content.
 
-```text
-sections = {
-    "V1": Verse 1,
-    "C": Chorus,
-    "B": Bridge
+```typescript
+interface ArrangementItem {
+  sectionId: string;
+  repetitions: number;
 }
 ```
 
-Each section should have:
+Therefore:
 
-- unique identifier
-- display name
-- section type
-- ChordPro content
-- ordering metadata where applicable
+```text
+B × 4
+```
+
+means:
+
+```text
+Reference Bridge
+Repeat 4 times
+```
+
+rather than storing four independent copies of the Bridge.
 
 ---
 
-# 6. Song Maps
-
-Song Maps define the actual performance sequence.
-
-Example:
-
-```text
-I → V1 → C → V2 → C → B×4 → C×2 → T
-```
-
-Internally this may be represented as:
-
-```text
-[
-  "INTRO",
-  "VERSE_1",
-  "CHORUS",
-  "VERSE_2",
-  "CHORUS",
-  "BRIDGE",
-  "BRIDGE",
-  "BRIDGE",
-  "BRIDGE",
-  "CHORUS",
-  "CHORUS",
-  "TAG"
-]
-```
-
-The UI should allow song maps to be created without manually editing this representation.
-
-### Required Song Map Operations
+# 12. Song Map Editor
 
 The operator must be able to:
 
-- add a section
-- remove a section
+- add sections
+- remove sections
 - reorder sections
-- duplicate a section
+- duplicate references
 - specify repetitions
-- clear the map
-- save the map as an arrangement
-- select among saved arrangements
+- save arrangements
+- duplicate arrangements
+- rename arrangements
+- restore source order
 
-A drag-and-drop interface is preferred.
-
-Example:
+Preferred interface:
 
 ```text
-[Intro]
-[Verse 1]
-[Chorus]
-[Verse 2]
-[Chorus]
-[Bridge ×4]
-[Chorus ×2]
-[Tag]
+AVAILABLE SECTIONS
+
+[I] [V1] [V2] [C1A] [C1B] [B] [INST] [E]
+
+
+ARRANGEMENT
+
+┌──────────────┐
+│ Intro        │
+├──────────────┤
+│ Verse 1      │
+├──────────────┤
+│ Chorus 1a    │
+├──────────────┤
+│ Instrumental │
+├──────────────┤
+│ Verse 2      │
+├──────────────┤
+│ Chorus 1b    │
+├──────────────┤
+│ Bridge       │ × 1
+├──────────────┤
+│ Chorus 1c    │
+├──────────────┤
+│ Chorus 1d    │
+├──────────────┤
+│ Ending       │
+└──────────────┘
+```
+
+Drag-and-drop is preferred.
+
+---
+
+# 13. Chord Parsing
+
+Inline ChordPro chords must be represented independently from lyrics.
+
+For example:
+
+```chordpro
+Because He [C]lives, [F]I can face to - [G]morrow
+```
+
+should conceptually become:
+
+```text
+Because He lives, I can face tomorrow
+           C      F             G
+```
+
+while preserving exact chord positions.
+
+SetFlow must support at minimum:
+
+- major chords
+- minor chords
+- sharps/flats
+- slash chords
+- common extensions
+- chord-only lines
+
+Examples from real imported charts include:
+
+```text
+Am
+F
+C
+G
+G/B
+C/E
 ```
 
 ---
 
-# 7. Automatic Performance Chart Generation
+# 14. Bar / Chord-Only Lines
 
-SetFlow must generate a chronological chart from:
+SetFlow must correctly render instrumental notation such as:
 
-```text
-Section definitions + Song Map
+```chordpro
+[|] [Am]    [F]    [|] [C]         [|] [Am]    [F]    [|] [C]         [|]
 ```
+
+The renderer must not assume every line contains lyrics.
+
+Chord-only sections such as Intro and Instrumental are first-class chart content.
+
+Stage View should preserve enough spacing and bar information for these sections to remain musically useful.
+
+---
+
+# 15. Transposition
+
+SetFlow must transpose parsed chords without modifying lyrics or structural markers.
 
 Example:
 
 ```text
-VERSE 1
-<Verse 1 content>
-
-CHORUS
-<Chorus content>
-
-VERSE 2
-<Verse 2 content>
-
-CHORUS
-<Chorus content>
-
-BRIDGE
-<Bridge content>
-
-BRIDGE
-<Bridge content>
-
-CHORUS
-<Chorus content>
+C    → D
+Am   → Bm
+F    → G
+G    → A
+G/B  → A/C#
+C/E  → D/F#
 ```
 
-The generated chart must update whenever:
+The original key and original ChordPro should remain preserved.
 
-- ChordPro source changes
-- a section changes
-- the song map changes
-- the key changes
+The performance key belongs to the arrangement/setlist context where possible.
+
+This allows the same song to be performed in different keys without creating duplicate song records.
 
 ---
 
-# 8. ChordPro Requirements
+# 16. Import Workflow
 
-SetFlow should use **ChordPro as its primary interchange format**.
+The primary MVP acquisition workflow should assume that direct SongSelect API integration is unavailable.
 
-Required support:
+Supported workflows:
 
-- inline chords
-- song title
-- artist
-- key
-- comments
-- section directives
-- verse sections
-- chorus sections
-- bridge sections
-- custom sections
+### File Import
+
+```text
+SongSelect
+    ↓
+Download ChordPro
+    ↓
+Drag file into SetFlow
+```
+
+### Paste Import
+
+```text
+SongSelect / other source
+    ↓
+Copy ChordPro
+    ↓
+Paste into SetFlow
+```
+
+### Manual Creation
+
+The user may create a song directly in SetFlow.
+
+---
+
+# 17. Import Preview
+
+Before committing an imported chart, SetFlow should display what it detected.
 
 Example:
 
 ```text
-[G]Amazing grace how [C]sweet the [G]sound
+┌────────────────────────────────────────────┐
+│ IMPORT SONG                               │
+│                                            │
+│ Because He Lives (Amen)                   │
+│ Chris Tomlin, Daniel Carson, ...          │
+│                                            │
+│ Key: C        Tempo: 84        Time: 4/4  │
+│ CCLI: 7027887                              │
+│                                            │
+│ DETECTED SECTIONS                          │
+│                                            │
+│ ✓ Intro                                   │
+│ ✓ Verse 1                                 │
+│ ✓ Chorus 1a                               │
+│ ✓ Instrumental                            │
+│ ✓ Verse 2                                 │
+│ ✓ Chorus 1b                               │
+│ ✓ Bridge                                  │
+│ ✓ Chorus 1c                               │
+│ ✓ Chorus 1d                               │
+│ ✓ Ending                                  │
+│                                            │
+│        [Edit Source]   [Import Song]       │
+└────────────────────────────────────────────┘
 ```
 
-The application should parse ChordPro into structured data rather than treating it solely as formatted text.
+This preview is important because section detection may occasionally require human correction.
 
 ---
 
-# 9. Transposition
+# 18. Rendering Architecture
 
-SetFlow must support automatic chord transposition.
+SetFlow should not rely on an external library's final HTML output as its primary renderer.
 
-Changing:
+An external ChordPro library may be used for:
+
+- tokenization
+- ChordPro parsing
+- chord recognition
+- transposition
+- metadata parsing
+
+SetFlow should convert parser output into its own internal model.
 
 ```text
-Key: G
+ChordPro Source
+      ↓
+ChordPro Parser
+      ↓
+Parser-Specific Model
+      ↓
+SetFlow Adapter
+      ↓
+SetFlowSong
+      ↓
+Arrangement Engine
+      ↓
+Performance Sequence
+      ↓
+┌───────────────┬────────────────┐
+│               │                │
+Control View  Stage View    Musician View
 ```
 
-to:
+This prevents SetFlow from becoming tightly coupled to one ChordPro library.
 
-```text
-Key: A
-```
+---
 
-should transpose all recognized chords.
+# 19. Generated Performance Sequence
+
+The Arrangement Engine converts an arrangement into an ordered sequence of section occurrences.
 
 Example:
 
 ```text
-G → A
-C → D
-D → E
-Em → F#m
-G/B → A/C#
+Arrangement:
+
+V1 → C → V2 → C → B×3 → C
 ```
 
-The underlying original chart should remain preserved.
-
-The UI should provide:
+becomes:
 
 ```text
-[-1] [-½]  KEY: G  [+½] [+1]
+1   Verse 1
+2   Chorus
+3   Verse 2
+4   Chorus
+5   Bridge 1/3
+6   Bridge 2/3
+7   Bridge 3/3
+8   Chorus
 ```
 
-or equivalent controls.
+A **section definition** and a **section occurrence** are different objects.
 
-Enharmonic spelling should be musically sensible.
+Conceptually:
+
+```typescript
+interface SectionOccurrence {
+  sectionId: string;
+  occurrenceIndex: number;
+  repetitionIndex: number;
+  repetitionCount: number;
+}
+```
+
+This distinction is essential for displaying:
+
+```text
+BRIDGE 2/4
+```
+
+without creating four copies of the Bridge content.
 
 ---
 
-# 10. Control View
+# 20. Control View
 
-Control View is the primary operator/MD interface.
+Control View runs on the host laptop.
 
-It should run on the host laptop's built-in landscape display.
+It provides:
 
-Example layout:
+- song library
+- setlist selection
+- arrangement selection
+- ChordPro editor
+- section editor
+- Song Map editor
+- transposition
+- current section
+- next section
+- previous/next controls
+- direct section navigation
+- Stage View status
+
+Example:
 
 ```text
 +-------------------------------------------------------+
-| SETFLOW                         Fall Getaway - Session 2 |
+| SETFLOW                    Fall Getaway — Session 2   |
 +----------------+--------------------------------------+
-| SETLIST        | BUILD MY LIFE                       |
-|                | Key: E      BPM: 68                 |
-| Gratitude      |                                      |
-| Build My Life  | SONG MAP                            |
-| Firm Foundation|                                      |
-| Goodness of God| V1 → C → V2 → C → B×4 → C×2 → T   |
+| SETLIST        | BECAUSE HE LIVES (AMEN)             |
+|                | Key: C      BPM: 84      4/4        |
+| Song 1         |                                      |
+| Because He...  | ARRANGEMENT                          |
+| Song 3         |                                      |
+| Song 4         | I → V1 → C1A → INST → V2 → C1B     |
+|                | → B → C1C → C1D → E                 |
 |                |                                      |
-|                | CURRENT: Bridge 2/4                 |
-|                | NEXT: Bridge 3/4                    |
+|                | CURRENT: Bridge                      |
+|                | NEXT: Chorus 1c                     |
 |                |                                      |
 |                | [PREV] [NEXT] [JUMP TO...]          |
 +----------------+--------------------------------------+
 ```
 
-Control View should provide:
-
-- setlist navigation
-- song selection
-- arrangement selection
-- current section
-- next section
-- previous/next controls
-- direct section jumping
-- key/transposition controls
-- ChordPro editing
-- Song Map editing
-- Stage View status
-
 ---
 
-# 11. Stage View
+# 21. Stage View
 
-Stage View is designed primarily for large portrait displays.
-
-Target display sizes:
-
-- 24"
-- 27"
-- 32"
-- 43"
+Stage View should be optimized for portrait displays such as 24", 27", 32", and 43" monitors.
 
 Typical resolution:
 
@@ -504,579 +845,260 @@ Typical resolution:
 1080 × 1920
 ```
 
-Stage View should prioritize **maximum readability at distance**.
-
 Example:
 
 ```text
-+----------------------------+
-| BUILD MY LIFE        KEY: E|
-|                            |
-|          CHORUS            |
-|                            |
-| A                          |
-| Holy, there is no one      |
-| like You                   |
-|                            |
-| E/G#                       |
-| There is none beside You   |
-|                            |
-|                            |
-| NEXT: BRIDGE               |
-+----------------------------+
+┌──────────────────────────────┐
+│ BECAUSE HE LIVES       C     │
+│                              │
+│            BRIDGE            │
+│                              │
+│ C                            │
+│ Because He lives,            │
+│                              │
+│ F                  G         │
+│ I can face tomorrow          │
+│                              │
+│ C                            │
+│ Because He lives             │
+│                              │
+│ F                 G          │
+│ Every fear is gone           │
+│                              │
+│                              │
+│ NEXT: CHORUS 1C              │
+└──────────────────────────────┘
 ```
 
-### Stage View Requirements
-
-- fullscreen
-- portrait optimized
-- very large text
-- clear section labels
-- high visual contrast
-- minimal controls
-- no editing UI
-- current song title
-- current key
-- current section
-- optional next-section indicator
-
-Stage View should be capable of showing:
-
-**Section Mode**
-- one musical section at a time
-
-and optionally:
-
-**Chart Mode**
-- chronological full-song chart
+Stage View prioritizes readability rather than reproducing the exact source-file layout.
 
 ---
 
-# 12. External Display Architecture
+# 22. Musician View
 
-The host computer should use an **extended desktop**.
+Musician View provides the chronological chart through any modern browser on the local network.
 
-Example:
+Musicians may independently control:
+
+- scroll position
+- zoom/font size
+- light/dark mode
+
+Authoritative content remains controlled by the host.
+
+A musician should be able to view the entire generated arrangement while Stage View may show only the current section.
+
+---
+
+# 23. Real-Time Synchronization
+
+The host is authoritative.
+
+Clients should synchronize state such as:
+
+```json
+{
+  "songId": "because-he-lives-amen",
+  "revision": 17,
+  "arrangementId": "default",
+  "performanceKey": "C",
+  "currentOccurrence": 6
+}
+```
+
+State synchronization is preferred over event-only synchronization.
+
+A reconnecting client must immediately obtain the current state rather than replay missed button presses.
+
+---
+
+# 24. Local Networking
+
+SetFlow must work entirely over LAN.
+
+Typical deployment:
 
 ```text
-Laptop Display
-1920 × 1080 landscape
-        |
-        └── Control View
-
-External Display
-1080 × 1920 portrait
-        |
-        └── Stage View
-                |
-             HDMI
-                |
-          HDMI Splitter
-          /     |     \
-        TV 1   TV 2   TV 3
+Router
+   |
+   +-- Host Laptop
+   |
+   +-- Drummer iPad
+   |
+   +-- Bassist Phone
+   |
+   +-- Keyboard Tablet
 ```
 
-SetFlow itself does not need to manage the HDMI splitter.
+Internet connectivity is optional.
 
-The operating system handles the external display.
-
----
-
-# 13. Musician View
-
-Musician View is intended for:
-
-- drummer
-- bassist
-- instrumentalists
-- vocalists
-- other musicians without direct visibility of the stage TVs
-
-It should be accessible through a standard web browser.
-
-No native application should be required.
-
-Example:
+A future convenience feature may expose the application at:
 
 ```text
 http://setflow.local
 ```
 
-### Musician View Requirements
-
-Musicians should receive:
-
-- current song
-- current chart revision
-- current key
-- chronological chart
-- updated ChordPro content
-
-Musicians should be allowed to control locally:
-
-- scrolling
-- zoom/font size
-- light/dark mode
-- potentially chord display preference
-
-Musicians should **not** have their scrolling position forcibly synchronized by default.
-
-The MD controls **content**, not where each musician is looking.
+and display a QR code for musicians to join.
 
 ---
 
-# 14. Local Networking
+# 25. Local Persistence
 
-The host laptop runs the SetFlow server.
+SetFlow must locally store:
 
-All devices connect through a local router.
-
-Example:
-
-```text
-AX3000
-192.168.1.1
-
-SetFlow Host
-192.168.1.10
-
-Musician Devices
-192.168.1.x
-```
-
-Internet access is optional.
-
-SetFlow must continue functioning if the router WAN cable is disconnected.
-
----
-
-# 15. Real-Time Updates
-
-SetFlow should use a real-time local communication mechanism such as WebSockets.
-
-When authoritative state changes, connected clients should receive the update.
-
-Examples:
-
-- ChordPro edited
-- key changed
-- arrangement changed
-- song changed
-- chart revision changed
-
-The system should synchronize **state**, not merely events.
-
-Bad:
-
-```text
-NEXT_PAGE
-NEXT_PAGE
-NEXT_PAGE
-```
-
-Preferred:
-
-```text
-song_id: 42
-revision: 17
-key: E
-current_section: BRIDGE
-section_occurrence: 2
-```
-
-This allows disconnected devices to immediately recover the correct state after reconnecting.
-
----
-
-# 16. Reconnection Behavior
-
-If a musician's device temporarily disconnects:
-
-1. The rest of SetFlow must continue operating.
-2. The disconnected client should attempt to reconnect.
-3. Upon reconnection, it requests the current authoritative state.
-4. The chart immediately updates to the latest revision.
-
-Clients should not need to replay missed events.
-
----
-
-# 17. Setlists
-
-SetFlow should support ordered setlists.
-
-Example:
-
-```text
-Fall Getaway 2026 — Saturday Night
-
-1. House of the Lord
-2. Build My Life
-3. Gratitude
-4. Firm Foundation
-5. Goodness of God
-```
-
-Each setlist item should reference:
-
-- song
-- selected arrangement
-- performance key
-- optional notes
-
----
-
-# 18. Local Persistence
-
-All required data must be stored locally.
-
-This includes:
-
-- songs
-- ChordPro source
+- original ChordPro
+- parsed song data
+- section definitions
 - arrangements
-- song maps
 - setlists
-- application settings
+- performance keys
+- settings
+- revision information
 
-Closing and reopening SetFlow must not require Internet access.
-
----
-
-# 19. Import and Export
-
-## Required
-
-SetFlow should support:
-
-- importing ChordPro files
-- exporting ChordPro files
-- copying ChordPro to clipboard
-- importing/exporting SetFlow song data
-
-## Desired
-
-Future integrations may include:
-
-- WorshipTools import/export
-- Planning Center import
-- SongSelect import
-- setlist bundle export
-
-External integrations must remain optional.
+Restarting SetFlow must not require Internet connectivity.
 
 ---
 
-# 20. Revision Tracking
-
-Every meaningful chart edit should increment a revision number.
-
-Example:
-
-```text
-Build My Life
-Revision 14
-```
-
-Connected clients should know which revision they are displaying.
-
-This helps prevent situations where different musicians unknowingly have different versions.
-
-Future versions may provide:
-
-- revision history
-- undo
-- restore previous revision
-- change comparison
-
----
-
-# 21. MD / Performance Features
-
-Future versions may include a dedicated MD mode.
-
-Potential features:
-
-- current section
-- next section
-- remaining arrangement
-- BPM
-- key
-- time signature
-- MD notes
-- countdown
-- elapsed song time
-- set duration
-
-Example:
-
-```text
-BUILD MY LIFE
-
-CURRENT
-BRIDGE 2/4
-
-NEXT
-BRIDGE 3/4
-
-THEN
-BRIDGE 4/4
-CHORUS
-CHORUS
-TAG
-```
-
----
-
-# 22. Stage Cues
-
-Future versions may allow the MD to send temporary cues.
-
-Examples:
-
-```text
-CHORUS AGAIN
-VAMP
-BUILD
-DOWN
-END
-SKIP V2
-```
-
-These cues may appear temporarily at the top of Stage View and/or Musician View.
-
-They should not modify the underlying chart.
-
----
-
-# 23. PRIME / MIDI Integration
-
-Future versions may support external playback systems such as Loop Community PRIME.
-
-Potential inputs:
-
-- MIDI
-- MIDI clock
-- section triggers
-- song selection
-- playback state
-
-Example future architecture:
-
-```text
-PRIME
-  |
-  | MIDI / section events
-  v
-SetFlow
-  |
-  +--> Stage View
-  |
-  +--> Musician View
-```
-
-This integration must not be required for basic operation.
-
----
-
-# 24. User Roles
-
-MVP roles:
-
-### Operator
-
-Can:
-
-- edit songs
-- edit ChordPro
-- edit song maps
-- change keys
-- create setlists
-- control Stage View
-
-### Musician
-
-Can:
-
-- view charts
-- adjust local display settings
-- scroll independently
-
-Cannot modify authoritative song content.
-
-Future versions may add:
-
-- MD
-- administrator
-- read-only guest
-
----
-
-# 25. Reliability Requirements
+# 26. Reliability Requirements
 
 SetFlow is live-performance software.
 
-Reliability is more important than feature count.
+The following must not interrupt the overall session:
 
-The following failures must not terminate an active session:
-
-- Internet loss
-- WAN disconnect
-- musician device disconnect
-- musician browser refresh
+- WAN failure
+- Internet failure
+- individual musician disconnect
+- browser refresh
 - one musician device crashing
 
-The host should remain authoritative throughout the session.
+The host remains authoritative.
+
+Clients automatically reconnect and retrieve current state.
 
 ---
 
-# 26. Performance Requirements
+# 27. MVP
 
-For a typical local network:
+SetFlow 0.1 should include:
 
-- chart updates should appear on connected clients in less than approximately 250 ms
-- Stage View should update effectively instantaneously
-- changing songs should not require a page reload
-- reconnecting clients should recover automatically
-- the application should comfortably support at least 20 simultaneous musician clients
-
----
-
-# 27. Security Model
-
-SetFlow is primarily intended for trusted local networks.
-
-MVP security can therefore remain simple.
-
-However:
-
-- Musician clients must not be able to modify authoritative data.
-- Operator controls should not be exposed accidentally through Musician View.
-- The server should not require Internet-facing ports.
-- No cloud account should be required.
-
-Future versions may add a simple session PIN or operator password.
+1. ChordPro file import
+2. ChordPro paste import
+3. SongSelect-style metadata parsing
+4. `{comment: ...}` section detection
+5. Section normalization
+6. Chord parsing
+7. Chord-only/instrumental line support
+8. Original-source preservation
+9. Automatic Source Order arrangement
+10. Song Map editor
+11. Repeated section references
+12. Chronological performance-sequence generation
+13. Transposition
+14. Setlists
+15. Control View
+16. Portrait Stage View
+17. Browser Musician View
+18. Local WebSocket synchronization
+19. Local persistence
+20. Client reconnection
 
 ---
 
-# 28. Platform Requirements
+# 28. Explicit MVP Non-Goals
 
-The host application should ideally support:
+SetFlow 0.1 will not attempt to provide:
 
-- Windows
-- macOS
-
-Musician View should support modern browsers on:
-
-- iOS
-- iPadOS
-- Android
-- Windows
-- macOS
-
-Stage View should run in a browser or dedicated application window.
-
----
-
-# 29. MVP Scope
-
-Version 0.1 should contain only:
-
-1. Local SetFlow server
-2. ChordPro song storage
-3. ChordPro parser/rendering
-4. Section recognition
-5. Song Map creation
-6. Automatic chronological chart generation
-7. Setlists
-8. Key transposition
-9. Control View
-10. Portrait Stage View
-11. Browser-based Musician View
-12. Real-time LAN chart updates
-13. Local persistence
-14. Reconnection/state recovery
-
-If these features work reliably, SetFlow already solves its primary problem.
+- direct SongSelect API integration
+- CCLI account authentication
+- automatic CCLI reporting
+- congregation lyric presentation
+- volunteer scheduling
+- cloud accounts
+- cloud synchronization
+- multitrack playback
+- lighting control
+- DAW functionality
+- WorshipTools replacement
+- Planning Center replacement
 
 ---
 
-# 30. Explicit Non-Goals for MVP
+# 29. Future Integrations
 
-Version 0.1 should **not** attempt to become:
+Possible future integrations include:
 
-- a WorshipTools replacement
-- presentation software for congregation lyrics
-- a church scheduling platform
-- a volunteer management system
-- a cloud service
-- a multitrack playback application
-- a DAW
-- a lighting controller
-- a full Planning Center replacement
-- a full music notation editor
-
-SetFlow should do one thing exceptionally well:
-
-> **Turn ChordPro sections and a programmed song map into reliable, readable, synchronized performance charts over a local network.**
-
----
-
-# 31. Future Feature Ideas
-
-After the MVP is stable:
-
-- PWA installation
-- QR-code musician joining
-- Nashville Number System
-- Roman numeral display
-- per-user chord preferences
-- annotations
-- personal musician notes
-- MIDI integration
-- PRIME integration
-- foot-pedal control
-- automatic scrolling
-- timed section advancement
-- MD cue messages
-- multiple simultaneous stage outputs
+- official SongSelect integration if API/partnership access becomes available
 - WorshipTools interoperability
 - Planning Center interoperability
-- cloud backup
-- collaborative editing
-- revision history
-- PDF export
-- printable charts
+- PRIME/MIDI integration
+- CCLI reporting where legally and technically supported
+
+SetFlow's core architecture must not depend on any of these integrations.
 
 ---
 
-# 32. Definition of MVP Success
+# 30. MVP Acceptance Test
 
-SetFlow 0.1 is successful if the following test works:
+Given a SongSelect ChordPro chart structured like:
 
-1. Connect a host laptop, phone, and tablet to a router.
-2. Disconnect the router's WAN connection completely.
-3. Launch SetFlow on the laptop.
-4. Open Musician View on the phone and tablet.
-5. Load a song containing Verse, Chorus, and Bridge sections.
-6. Program:
+```chordpro
+{title: Because He Lives (Amen)}
+{key: C}
+{tempo: 84}
 
-   `V1 → C → V2 → C → B×2 → C`
+{comment: Intro}
+...
 
-7. Verify that SetFlow generates the chart in that chronological order.
-8. Change a chord in the Chorus.
-9. Verify that every Chorus occurrence updates.
-10. Verify that Stage View updates.
-11. Verify that both musician devices update automatically.
-12. Change the song key.
-13. Verify that all views transpose.
-14. Disconnect one musician device.
-15. Change the chart.
-16. Reconnect the device.
-17. Verify that it immediately receives the newest chart revision.
+{comment: Verse 1}
+...
 
-All of this must succeed with:
+{comment: Chorus 1a}
+...
 
-**zero Internet connectivity.**
+{comment: Instrumental}
+...
 
-If this works reliably, the fundamental SetFlow architecture is successful.
+{comment: Verse 2}
+...
+
+{comment: Chorus 1b}
+...
+
+{comment: Bridge}
+...
+
+{comment: Chorus 1c}
+...
+
+{comment: Chorus 1d}
+...
+
+{comment: Ending}
+...
+```
+
+SetFlow must:
+
+1. Read the metadata.
+2. Detect all ten sections.
+3. Preserve their original names.
+4. Classify their musical types.
+5. Preserve chord-only Intro/Instrumental content.
+6. Create a Source Order arrangement automatically.
+7. Allow the user to reorder the sections.
+8. Allow repeated references to sections.
+9. Generate a chronological performance sequence.
+10. Render that sequence correctly.
+11. Transpose chords including slash chords.
+12. Display the current section on Stage View.
+13. Display the full arrangement in Musician View.
+14. Propagate edits to connected clients.
+15. Continue doing all of the above without Internet connectivity.
+
+The fundamental SetFlow pipeline is therefore:
+
+> **Real-world ChordPro → Sections → Song Map → Performance Sequence → Stage + Musician Views**
+
+rather than:
+
+> **ChordPro → static formatted document**
