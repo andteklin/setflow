@@ -1031,7 +1031,7 @@ Possible future integrations include:
 - WorshipTools interoperability
 - Planning Center interoperability
 - PRIME/MIDI integration
-- MIDI integration with WorshipTools (map midi cues to sections)
+- MIDI integration with WorshipTools (map midi cues to sections). On section change, a MIDI command is cued and jumps to the first lyric of the section that was cued. 
 - CCLI reporting where legally and technically supported
 
 SetFlow's core architecture must not depend on any of these integrations.
