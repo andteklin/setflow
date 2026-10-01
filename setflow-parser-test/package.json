@@ -4,6 +4,7 @@
   "description": "",
   "main": "index.js",
   "scripts": {
+    "ui": "vite web --open",
     "arrange": "tsx src/arrange.ts",
     "test": "node --import tsx --test test/*.test.ts",
     "typecheck": "tsc --noEmit"
@@ -18,6 +19,7 @@
   "devDependencies": {
     "@types/node": "^26.6.2",
     "tsx": "^4.23.13",
-    "typescript": "^7.0.2"
+    "typescript": "^7.0.2",
+    "vite": "^8.3.2"
   }
 }
