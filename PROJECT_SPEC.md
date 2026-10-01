@@ -2,12 +2,13 @@
 
 ## 1. Project Overview
 
-**SetFlow** is a local-first worship chart and music-director application that converts ChordPro songs into programmable, chronological performance charts.
+**SetFlow** is a local-first live worship arrangement system where the band’s arrangement and live Performance State are the source of truth. It converts reusable song sections and Song Maps into chronological charts, then follows the music director (MD) as the band changes course during performance.
 
-SetFlow separates two concepts that are commonly combined in static worship charts:
+SetFlow separates three concepts that are commonly combined in static worship charts:
 
 1. **Song content** — the reusable musical sections of a song.
-2. **Song arrangement** — the order in which those sections are performed.
+2. **Song arrangement** — the planned order in which those sections are performed.
+3. **Performance State** — what the band is performing now, what comes next, and any live deviations from the plan.
 
 A source chart may contain:
 
@@ -44,11 +45,11 @@ All live-performance functionality must operate over a local network without Int
 
 ---
 
-# 2. Core Design Principles
+## 2. Core Design Principles
 
-## 2.1 Local First
+### 2.1 Local First
 
-Internet connectivity must never be required during a live performance.
+Local-first/offline operation is a product requirement. Internet connectivity, cloud login, provider authentication, remote assets, and external APIs must never be required to start or run a performance using locally stored content. The host serves the application and charts entirely over LAN; a fresh client can join and a host can restart with WAN disconnected.
 
 ```text
                      LOCAL ROUTER
@@ -62,13 +63,13 @@ Internet connectivity must never be required during a live performance.
         Stage Output
              |
        HDMI Splitter
-        /    |    \
+        /    |    \\
       TV 1  TV 2  TV 3
 ```
 
 Optional cloud integrations may exist in the future, but loss of Internet connectivity must not interrupt an active SetFlow session.
 
-## 2.2 Preserve the Original ChordPro
+### 2.2 Preserve the Original ChordPro
 
 Imported ChordPro must be retained in its original form whenever practical.
 
@@ -83,14 +84,16 @@ Original ChordPro
        ↓
 Normalized SetFlow Song Model
        ↓
-Section / Arrangement Engine
+Arrangement Engine → Planned Sequence
        ↓
-Renderer
+Performance Engine + MD Commands
+       ↓
+Performance State → Renderers
 ```
 
 The original source remains available for editing, export, debugging, and reparsing.
 
-## 2.3 Separate Content from Arrangement
+### 2.3 Separate Content from Arrangement
 
 The source chart defines musical content.
 
@@ -98,7 +101,7 @@ A SetFlow Arrangement defines performance order.
 
 Multiple arrangements may reference the same song.
 
-## 2.4 One Application, Multiple Views
+### 2.4 One Application, Multiple Views
 
 SetFlow is one application with a shared data model and at least three interfaces:
 
@@ -108,7 +111,15 @@ SetFlow is one application with a shared data model and at least three interface
 
 ---
 
-# 3. Real-World ChordPro Compatibility
+### 2.5 Track Independence
+
+The MD/band controls musical time. SetFlow follows explicit human commands; no click, backing track, audio timeline, tempo clock, or automatic bar detection is required. Tempo and time signature are descriptive metadata. Holding a section does not trigger audio playback or advance on a timer.
+
+### 2.6 Planned Arrangement and Live Authority
+
+The Arrangement Engine expands a saved Song Map into a planned sequence. The Performance Engine owns a session copy and applies live commands to it. Live deviations never silently rewrite the saved arrangement or original song. Stage, Musician, and Control Views consume the same authoritative Performance State.
+
+## 3. Real-World ChordPro Compatibility
 
 SetFlow must prioritize compatibility with ChordPro files produced by common worship-music sources rather than requiring perfectly semantic ChordPro.
 
@@ -152,7 +163,7 @@ SetFlow must correctly interpret this style of file.
 
 ---
 
-# 4. Metadata Parsing
+## 4. Metadata Parsing
 
 SetFlow should recognize common metadata directives including:
 
@@ -190,9 +201,9 @@ interface SongMetadata {
 
 ---
 
-# 5. Section Detection
+## 5. Section Detection
 
-## 5.1 Comment-Based Sections
+### 5.1 Comment-Based Sections
 
 SetFlow must support section boundaries expressed using `{comment: ...}`.
 
@@ -216,13 +227,13 @@ The section continues until:
 - another structural section marker occurs, or
 - the song ends.
 
-## 5.2 Semantic Section Directives
+### 5.2 Semantic Section Directives
 
 SetFlow should additionally support standard semantic ChordPro structures where available, such as verse, chorus, bridge, or custom environment directives.
 
 Semantic directives should take precedence over heuristic comment detection where the source explicitly supplies them.
 
-## 5.3 Section Recognition
+### 5.3 Section Recognition
 
 Section names should be normalized when possible.
 
@@ -249,7 +260,7 @@ The **original label must always be preserved**.
 
 Normalization exists for SetFlow logic and compact UI presentation; it must not destroy the source label.
 
-## 5.4 Unknown Section Names
+### 5.4 Unknown Section Names
 
 SetFlow must not require sections to use a predefined vocabulary.
 
@@ -273,7 +284,7 @@ The user should be able to correct the classification manually.
 
 ---
 
-# 6. Comments vs. Section Markers
+## 6. Comments vs. Section Markers
 
 Not every `{comment: ...}` directive necessarily represents a musical section.
 
@@ -313,7 +324,7 @@ The importer should prioritize **not losing information** over aggressive normal
 
 ---
 
-# 7. Section Model
+## 7. Section Model
 
 A SetFlow section should contain:
 
@@ -366,7 +377,7 @@ E       Ending
 
 ---
 
-# 8. Important: Similar Sections Are Not Necessarily Identical
+## 8. Important: Similar Sections Are Not Necessarily Identical
 
 SetFlow must **not automatically merge sections simply because their names are similar**.
 
@@ -403,7 +414,7 @@ are merely repeated instances of one Chorus.
 
 ---
 
-# 9. Optional Section Linking
+## 9. Optional Section Linking
 
 SetFlow may allow the user to identify sections that should share content.
 
@@ -430,7 +441,7 @@ This feature is not required for the initial MVP.
 
 ---
 
-# 10. Default Imported Arrangement
+## 10. Default Imported Arrangement
 
 Upon importing a ChordPro file, SetFlow should automatically create an arrangement corresponding to **source order**.
 
@@ -465,7 +476,7 @@ Source Order
 
 ---
 
-# 11. Song Maps
+## 11. Song Maps
 
 A Song Map defines performance order independently from source order.
 
@@ -507,7 +518,7 @@ rather than storing four independent copies of the Bridge.
 
 ---
 
-# 12. Song Map Editor
+## 12. Song Map Editor
 
 The operator must be able to:
 
@@ -558,7 +569,7 @@ Drag-and-drop is preferred.
 
 ---
 
-# 13. Chord Parsing
+## 13. Chord Parsing
 
 Inline ChordPro chords must be represented independently from lyrics.
 
@@ -599,7 +610,7 @@ C/E
 
 ---
 
-# 14. Bar / Chord-Only Lines
+## 14. Bar / Chord-Only Lines
 
 SetFlow must correctly render instrumental notation such as:
 
@@ -615,7 +626,7 @@ Stage View should preserve enough spacing and bar information for these sections
 
 ---
 
-# 15. Transposition
+## 15. Transposition
 
 SetFlow must transpose parsed chords without modifying lyrics or structural markers.
 
@@ -638,7 +649,7 @@ This allows the same song to be performed in different keys without creating dup
 
 ---
 
-# 16. Import Workflow
+## 16. Import Workflow
 
 The primary MVP acquisition workflow should assume that direct SongSelect API integration is unavailable.
 
@@ -670,7 +681,44 @@ The user may create a song directly in SetFlow.
 
 ---
 
-# 17. Import Preview
+### 16.1 SongProvider Boundary
+
+File import, paste import, and manual creation are the MVP providers. A provider acquires content and provenance; the shared importer performs parsing, normalization, preview, and local persistence. Providers do not own arrangement or performance behavior.
+
+```typescript
+interface SongProvider {
+  id: string;
+  capabilities: { search: boolean; requiresAccount: boolean };
+  acquire(input: ProviderInput): Promise<ImportedSong>;
+  search?(query: string): Promise<SongSearchResult[]>;
+}
+
+type ProviderInput =
+  | { kind: "file"; name: string; text: string }
+  | { kind: "paste"; text: string }
+  | { kind: "manual"; song: SetFlowSong }
+  | { kind: "remote"; providerSongId: string }; // future only
+
+interface ImportedSong {
+  source: { format: "chordpro"; originalText: string }
+        | { format: "manual"; song: SetFlowSong };
+  provenance: {
+    providerId: string;
+    providerSongId?: string;
+    importedAt: string;
+    storagePolicy: "organization-local" | "cloud-permitted";
+    permissionReference?: string;
+  };
+}
+```
+
+These are conceptual interfaces; `SetFlowSong` is the normalized song model and `SongSearchResult` is a future provider search result. Unsupported acquisition kinds return a clear error. Local providers require no account or API. Official PraiseCharts, SongSelect, or other adapters may be added later only when access and provider terms permit; no provider API is an MVP dependency.
+
+### 16.2 Content Storage Policy
+
+Licensed chart content, original source, and derived charts remain organization-local unless applicable provider terms explicitly permit cloud storage. Preserve provenance, copyright, footer, CCLI identifiers, and any supplied usage restrictions. Importing a file does not grant redistribution rights. Future cloud features must honor this policy for backups, synchronization, and derived content; do not upload chart content by default or pool organizations’ libraries into a shared catalog. This is a product storage constraint, not a claim that any particular provider grants permission.
+
+## 17. Import Preview
 
 Before committing an imported chart, SetFlow should display what it detected.
 
@@ -707,45 +755,41 @@ This preview is important because section detection may occasionally require hum
 
 ---
 
-# 18. Rendering Architecture
+## 18. Rendering and Performance Architecture
 
-SetFlow should not rely on an external library's final HTML output as its primary renderer.
-
-An external ChordPro library may be used for:
-
-- tokenization
-- ChordPro parsing
-- chord recognition
-- transposition
-- metadata parsing
-
-SetFlow should convert parser output into its own internal model.
+SetFlow should not rely on an external library's final HTML output as its primary renderer. An external library may handle tokenization, ChordPro parsing, chord recognition, transposition, and metadata parsing. A SetFlow adapter converts its output into the internal model, preventing coupling to one parser.
 
 ```text
-ChordPro Source
-      ↓
-ChordPro Parser
-      ↓
-Parser-Specific Model
-      ↓
-SetFlow Adapter
-      ↓
-SetFlowSong
-      ↓
-Arrangement Engine
-      ↓
-Performance Sequence
-      ↓
-┌───────────────┬────────────────┐
-│               │                │
-Control View  Stage View    Musician View
+File / Paste / Manual       Official providers (future)
+          └──────────────────────┘
+                    SongProvider
+                         ↓
+          Preserved Source + Provenance
+                         ↓
+          Parser → SetFlow Adapter → SetFlowSong
+                         ↓
+                 Section Definitions
+                         ↓
+                      Song Map
+                         ↓
+         Arrangement Engine → Planned Sequence
+                                      ↓
+Web UI ──┐                      Performance Engine
+Keyboard ├→ Input adapters → Commands →│
+MIDI ────┘                            ↓
+GPIO (future) ─→ same path      Performance State
+                                      ↓
+                    ┌─────────────────┼────────────────┐
+                 Control            Stage           Musician
+                                      ↓
+                       Optional integrations (future)
 ```
 
-This prevents SetFlow from becoming tightly coupled to one ChordPro library.
+Rendering uses song content plus the effective session sequence, performance key, and current state. No renderer independently advances musical time. Optional future outputs subscribe to accepted state changes; they cannot become a dependency of local performance.
 
 ---
 
-# 19. Generated Performance Sequence
+## 19. Generated Performance Sequence
 
 The Arrangement Engine converts an arrangement into an ordered sequence of section occurrences.
 
@@ -776,6 +820,8 @@ Conceptually:
 
 ```typescript
 interface SectionOccurrence {
+  id: string; // stable occurrence identity within the session
+  origin: "planned" | "live";
   sectionId: string;
   occurrenceIndex: number;
   repetitionIndex: number;
@@ -793,7 +839,82 @@ without creating four copies of the Bridge content.
 
 ---
 
-# 20. Control View
+### 19.1 Performance Engine and Performance State
+
+The host runs one authoritative Performance Engine per active session. It validates commands, applies deterministic transitions, assigns revisions, and broadcasts complete state snapshots. It is separate from the Arrangement Engine: expanding a plan and conducting a live performance are different responsibilities.
+
+```typescript
+type PerformanceCommand =
+  | { type: "NEXT" }
+  | { type: "PREVIOUS" }
+  | { type: "REPEAT" }
+  | { type: "JUMP"; sectionId: string; targetOccurrenceId?: string }
+  | { type: "VAMP" }
+  | { type: "END" };
+
+interface CommandEnvelope {
+  commandId: string;
+  sessionId: string;
+  expectedRevision: number;
+  source: "web" | "keyboard" | "midi" | "gpio";
+  controllerId: string;
+  command: PerformanceCommand;
+}
+
+interface PerformanceState {
+  sessionId: string;
+  revision: number;
+  songId: string;
+  arrangementId: string;
+  arrangementRevision: number;
+  status: "ready" | "active" | "ended";
+  performanceKey: string;
+  sequence: SectionOccurrence[]; // effective session sequence
+  currentOccurrenceId: string | null;
+  nextOccurrenceId: string | null;
+  vamping: boolean;
+  repetition: { index: number; total: number | null }; // null total = open vamp
+  cues: string[];
+  liveDeviations: Array<{
+    revision: number;
+    commandId: string;
+    command: PerformanceCommand;
+    fromOccurrenceId: string | null;
+    toOccurrenceId: string | null;
+  }>;
+}
+```
+
+IDs distinguish repeated visits to the same section; array positions are never persistent identities. Counters describe the current contiguous repetition group, not all visits to that section throughout the song. Keep the saved plan available alongside the effective live sequence.
+
+### 19.2 MVP Command Semantics
+
+The MD issues transitions at the intended musical boundary. MVP commands act immediately when accepted; there is no beat quantization or scheduled audio transition.
+
+| Command | Accepted behavior |
+|---|---|
+| `NEXT` | Enter the next effective occurrence. From ready, enter the first occurrence. While vamping, exit the vamp and enter its saved successor. At the final occurrence, end the performance. |
+| `PREVIOUS` | Return to the previous occurrence in the effective sequence, clearing vamp mode. At the beginning, do nothing. This is navigation, not an undo of earlier deviations. |
+| `REPEAT` | Insert a new occurrence of the current section immediately after it and enter that occurrence now. Preserve the previous successor after the inserted repeat. Update the contiguous repetition count on every view; while vamping, count another iteration and remain in vamp mode. |
+| `JUMP` | Immediately select a specific section of the active song, clear vamp mode, and show its chart. If an occurrence ID is supplied, use that matching occurrence and continue from it. Otherwise choose the first matching occurrence after the current position, falling back to the first matching occurrence in the sequence. If absent from the sequence, insert a live occurrence after the current one and resume the prior successor afterward. |
+| `VAMP` | Hold the current section indefinitely until `NEXT`, `JUMP`, `PREVIOUS`, or `END`. Repeated `VAMP` is idempotent; `REPEAT` explicitly counts another iteration. Show `VAMP — UNTIL CUE`, with the exit successor separately labeled. |
+| `END` | Mark ended, clear current/next and vamp state, and show `ENDED` on all views. It does not jump to a section named Ending; use `JUMP` for that. |
+
+`REPEAT`, `VAMP`, and `PREVIOUS` require an active current occurrence. A valid `JUMP` from ready starts performance at its target. After ending, transport commands do not restart the song; the operator explicitly starts a new session. Invalid targets are rejected without changing state. `NEXT` while vamping always exits, even if prior repeat commands extended the repetition group.
+
+Live commands change only the session sequence and deviation history. Editing a saved song/map during performance stages changes for the next session; explicit application to the active session must validate occurrence references and broadcast one coherent revision. MVP may require ending and restarting before applying structural edits. Performance key and cues are host-controlled state changes and use the same validation/revision authority.
+
+### 19.3 Shared Input Path and MIDI Scope
+
+Web buttons, keyboard shortcuts, and MIDI controller input are MVP input adapters. Future GPIO uses the same abstraction. Every adapter maps an input to a `PerformanceCommand` and sends it through the host's command gateway; none manipulates a view or sequence directly.
+
+The gateway validates the authorized local controller, session, expected revision, and target. It serializes accepted commands, deduplicates retries by `commandId`, and returns an acknowledgement with the authoritative revision. Stale commands are rejected with a fresh snapshot rather than blindly replayed. The active MD controller sends commands in order. View-only musician clients cannot conduct the band.
+
+MVP MIDI is deliberately small: one selected controller connected to the host, configurable note-on or control-change button mappings, channel selection, a mapping test, and saved local mappings. Map named jump buttons to section IDs, including exact chorus variants. Ignore note-off/zero-velocity release events, trigger control-change buttons only on the configured press edge, and suppress duplicate transport retries without suppressing deliberate repeated presses. Keyboard shortcuts are disabled while typing into editors.
+
+Use a host-side MIDI adapter in the supported desktop host environment, so musician browsers do not need MIDI access or browser MIDI permissions. Validate one documented controller/host combination for MVP. Device hot-unplug reports status and leaves Web/keyboard control working. MIDI clock, MIDI output, track control, and external application cue mapping are future features.
+
+## 20. Control View
 
 Control View runs on the host laptop.
 
@@ -808,7 +929,9 @@ It provides:
 - transposition
 - current section
 - next section
-- previous/next controls
+- NEXT, PREVIOUS, REPEAT, JUMP, VAMP, and END controls with keyboard equivalents
+- MIDI device selection, mappings, and connection status
+- active repetition, vamp status, live deviations, and MD cues
 - direct section navigation
 - Stage View status
 
@@ -829,13 +952,15 @@ Example:
 |                | CURRENT: Bridge                      |
 |                | NEXT: Chorus 1c                     |
 |                |                                      |
-|                | [PREV] [NEXT] [JUMP TO...]          |
+|                | [PREV] [NEXT] [REPEAT] [JUMP TO...] [VAMP] [END]          |
 +----------------+--------------------------------------+
 ```
 
 ---
 
-# 21. Stage View
+## 21. Stage View
+
+SetFlow Stage View displays band state from the Performance Engine: current occurrence, exact section variant, repetition, next section (or vamp exit), performance key, and MD cues. It remains independent from Presenter, congregation slides, and the slides operator; a slide change never changes SetFlow state in MVP.
 
 Stage View should be optimized for portrait displays such as 24", 27", 32", and 43" monitors.
 
@@ -874,7 +999,7 @@ Stage View prioritizes readability rather than reproducing the exact source-file
 
 ---
 
-# 22. Musician View
+## 22. Musician View
 
 Musician View provides the chronological chart through any modern browser on the local network.
 
@@ -884,35 +1009,23 @@ Musicians may independently control:
 - zoom/font size
 - light/dark mode
 
-Authoritative content remains controlled by the host.
+Authoritative content and Performance State remain controlled by the host. Synchronize current song, occurrence, next section, repetitions, deviations, key, and cues—not personal scroll position. A persistent live indicator remains visible while browsing, and **Return to Live** restores following the current occurrence. Personal display preferences never issue performance commands.
 
 A musician should be able to view the entire generated arrangement while Stage View may show only the current section.
 
 ---
 
-# 23. Real-Time Synchronization
+## 23. Real-Time Synchronization
 
-The host is authoritative.
+The host is authoritative for Performance State and content revisions. Local WebSockets publish revisioned state snapshots referencing locally available song data. Views render the same session sequence and current/next occurrence IDs; they never infer state by counting button events.
 
-Clients should synchronize state such as:
+A joining or reconnecting client retrieves the current snapshot and matching content before displaying itself as live. Ignore older revisions. A new session ID invalidates stale commands and snapshots from an earlier performance. Commands have acknowledgements and deduplication as defined in §19.3.
 
-```json
-{
-  "songId": "because-he-lives-amen",
-  "revision": 17,
-  "arrangementId": "default",
-  "performanceKey": "C",
-  "currentOccurrence": 6
-}
-```
-
-State synchronization is preferred over event-only synchronization.
-
-A reconnecting client must immediately obtain the current state rather than replay missed button presses.
+A disconnected client may retain its last chart with a visible **Disconnected / last known state** indicator. It must not claim to be current or queue offline navigation for automatic replay. Reconnection restores current band state while preserving personal zoom and browsing preferences.
 
 ---
 
-# 24. Local Networking
+## 24. Local Networking
 
 SetFlow must work entirely over LAN.
 
@@ -942,7 +1055,7 @@ and display a QR code for musicians to join.
 
 ---
 
-# 25. Local Persistence
+## 25. Local Persistence
 
 SetFlow must locally store:
 
@@ -954,12 +1067,15 @@ SetFlow must locally store:
 - performance keys
 - settings
 - revision information
+- provider provenance and content storage policy
+- MIDI/keyboard mappings
+- last committed performance snapshot and live deviations for explicit recovery
 
-Restarting SetFlow must not require Internet connectivity.
+Restarting SetFlow must not require Internet connectivity. Recovery presents the last committed snapshot for operator confirmation before resuming; it does not automatically advance the band. A recovered session receives a new session ID so old queued commands cannot apply.
 
 ---
 
-# 26. Reliability Requirements
+## 26. Reliability Requirements
 
 SetFlow is live-performance software.
 
@@ -973,133 +1089,133 @@ The following must not interrupt the overall session:
 
 The host remains authoritative.
 
-Clients automatically reconnect and retrieve current state.
+Clients automatically reconnect and retrieve current state. WAN loss must have no effect on LAN commands or chart delivery. LAN failure or host failure can interrupt live synchronization; clients show the disconnect clearly. MVP does not promise host failover. A MIDI disconnect affects only that input adapter.
 
 ---
 
-# 27. MVP
+## 27. MVP
 
 SetFlow 0.1 should include:
 
-1. ChordPro file import
-2. ChordPro paste import
-3. SongSelect-style metadata parsing
-4. `{comment: ...}` section detection
-5. Section normalization
-6. Chord parsing
-7. Chord-only/instrumental line support
-8. Original-source preservation
-9. Automatic Source Order arrangement
-10. Song Map editor
-11. Repeated section references
-12. Chronological performance-sequence generation
-13. Transposition
-14. Setlists
-15. Control View
-16. Portrait Stage View
-17. Browser Musician View
-18. Local WebSocket synchronization
-19. Local persistence
-20. Client reconnection
+1. File, paste, and manual acquisition through `SongProvider`, with no external API dependency.
+2. SongSelect-style metadata, semantic/comment section detection, manual correction, and original-label preservation.
+3. Chord parsing, chord-only/bar lines, slash chords, transposition, and original-source/unknown-directive preservation.
+4. Distinct chorus variants and automatic Source Order arrangements.
+5. Song Map editor, repeated section references, saved arrangements, setlists, and performance keys.
+6. Arrangement Engine and stable chronological section occurrences.
+7. Authoritative Performance Engine and first-class Performance State with current/next occurrences, repetitions, cues, and live deviations.
+8. Live `NEXT`, `PREVIOUS`, `REPEAT`, `JUMP`, `VAMP`, and `END` with the semantics in §19.
+9. Shared command gateway with Web UI, keyboard, and basic host-connected MIDI controller input.
+10. Control View, portrait Stage View, and browser Musician View with independent browsing and Return to Live.
+11. Local WebSocket snapshots, acknowledgements, revision checks, reconnect behavior, and visible stale-state indicators.
+12. Local persistence, organization-local content handling, and explicit host recovery.
+13. Fully offline startup, fresh client join, editing, transposition, and performance on a working LAN.
+
+MIDI controller input is MVP. External MIDI outputs and integrations remain outside MVP. No click or track is needed to exercise any live feature.
 
 ---
 
-# 28. Explicit MVP Non-Goals
+## 28. Explicit MVP Non-Goals
 
-SetFlow 0.1 will not attempt to provide:
+SetFlow 0.1 will not provide:
 
-- direct SongSelect API integration
-- CCLI account authentication
-- automatic CCLI reporting
-- congregation lyric presentation
-- volunteer scheduling
-- cloud accounts
-- cloud synchronization
-- multitrack playback
-- lighting control
-- DAW functionality
-- WorshipTools replacement
-- Planning Center replacement
+- SongSelect, PraiseCharts, or other provider APIs; CCLI account authentication or automatic reporting.
+- Cloud accounts, cloud synchronization, hosted content libraries, or cloud backups.
+- Raspberry Pi appliance packaging or custom GPIO controller hardware.
+- QLC+, PRIME, WorshipTools/Presenter, Planning Center, or other external application integrations.
+- Lighting/DMX control, outgoing MIDI cues, MIDI clock, or automated congregation lyrics.
+- Audio/click/multitrack playback, track synchronization, DAW functionality, or automatic musical-time tracking.
+- Volunteer scheduling, a WorshipTools/Planning Center replacement, or host failover.
+- Automatic merging/linking of similar sections or personal annotation systems.
+
+Basic MIDI controller **input** is included in MVP; this does not include controlling PRIME, Presenter, lights, or tracks.
 
 ---
 
-# 29. Future Integrations
+## 29. Future Integrations and Extensions
 
-Possible future integrations include:
+Possible future work, independent of the MVP:
 
-- official SongSelect integration if API/partnership access becomes available
-- WorshipTools interoperability
-- Planning Center interoperability
-- PRIME/MIDI integration
-- MIDI integration with WorshipTools (map midi cues to sections). On section change, a MIDI command is cued and jumps to the first lyric of the section that was cued. 
-- CCLI reporting where legally and technically supported
+- Official PraiseCharts, SongSelect, and other `SongProvider` adapters, subject to access, authorization, and provider terms. Their absence must never prevent local imports or performance.
+- WorshipTools/Presenter, Planning Center, and PRIME interoperability through explicit adapters.
+- Outgoing MIDI section cues, including optional mapping from SetFlow sections to presentation lyrics. External presentation state must not silently override band state.
+- QLC+ and other lighting outputs; optional tracks/click integrations that preserve a track-independent operating mode.
+- Raspberry Pi appliance packaging and GPIO input adapters using the existing command path.
+- Optional cloud accounts, configuration, and synchronization outside the live command loop, with licensed content kept local unless provider terms permit storage.
+- CCLI reporting where supported by applicable permissions and technical access.
+- Explicit section linking with a differences preview; shared and personal musician notes.
 
-SetFlow's core architecture must not depend on any of these integrations.
+Future adapters consume accepted state changes or submit authorized commands through the same gateway. They must avoid feedback loops and fail independently; the local Performance Engine remains authoritative. Core operation does not depend on any integration.
 
 ---
 
-# 30. MVP Acceptance Test
+## 30. MVP Acceptance Test
 
-Given a SongSelect ChordPro chart structured like:
+### 30.1 Preserve Real-World Import Behavior
 
-```chordpro
-{title: Because He Lives (Amen)}
-{key: C}
-{tempo: 84}
+Use the original SongSelect-style "Because He Lives (Amen)" fixture with metadata and these ten sections:
 
-{comment: Intro}
-...
-
-{comment: Verse 1}
-...
-
-{comment: Chorus 1a}
-...
-
-{comment: Instrumental}
-...
-
-{comment: Verse 2}
-...
-
-{comment: Chorus 1b}
-...
-
-{comment: Bridge}
-...
-
-{comment: Chorus 1c}
-...
-
-{comment: Chorus 1d}
-...
-
-{comment: Ending}
-...
+```text
+I → V1 → C1A → INST → V2 → C1B → B → C1C → C1D → E
 ```
 
-SetFlow must:
+1. Read title, artist, key, tempo, time, CCLI/license, copyright, and footer when supplied.
+2. Detect all ten sections, preserving source labels, order, content, and musical classification.
+3. Keep C1A, C1B, C1C, and C1D distinct; never replace them with one generic chorus.
+4. Preserve chord-only Intro/Instrumental content, bar notation, unknown directives, and original ChordPro.
+5. Preserve uncertain comments as annotations; allow manual conversion/correction and honor explicit semantic boundaries.
+6. Automatically create Source Order. Reorder sections, repeat references, and generate separate stable occurrences without duplicating section definitions.
+7. Transpose chords, including slash bass notes, without altering lyrics, bars, labels, or original source.
 
-1. Read the metadata.
-2. Detect all ten sections.
-3. Preserve their original names.
-4. Classify their musical types.
-5. Preserve chord-only Intro/Instrumental content.
-6. Create a Source Order arrangement automatically.
-7. Allow the user to reorder the sections.
-8. Allow repeated references to sections.
-9. Generate a chronological performance sequence.
-10. Render that sequence correctly.
-11. Transpose chords including slash chords.
-12. Display the current section on Stage View.
-13. Display the full arrangement in Musician View.
-14. Propagate edits to connected clients.
-15. Continue doing all of the above without Internet connectivity.
+### 30.2 Conduct a Live Band Without Tracks
 
-The fundamental SetFlow pipeline is therefore:
+1. Create `I → V1 → C1A → V2 → C1B → B×2 → C1C×2 → E`. This uses the actual fixture's distinct variants. For a separate song with one verified common chorus, the equivalent compact map may be `I V1 C V2 C B×2 C×2 E`.
+2. Connect Control, Stage, and a second musician device on LAN. Start ready and use `NEXT` to enter Intro. All views show the same current/next occurrences and key.
+3. Advance to Bridge 2/2. Press `REPEAT` at the intended boundary: all views immediately show Bridge 3/3, with C1C next. The saved map still contains B×2.
+4. Press a configured Chorus button: `JUMP` targets C1C by section ID, and all views immediately show that exact chorus variant. `NEXT` follows its selected occurrence's successor.
+5. Exercise `PREVIOUS`; verify position changes agree across views. Jump to a section absent from the custom map (INST), verify a live occurrence is inserted, and verify its prior successor is retained.
+6. Enter Bridge and press `VAMP`. All views show the indefinite hold and exit target. Waiting does not advance; `REPEAT` counts another iteration; `NEXT` exits to the saved successor.
+7. Issue `END`; all views show ended with no current/next target. Distinguish this from jumping to Ending.
+8. Exercise each command through Web UI and keyboard, then through a mapped host-connected MIDI controller. Verify release events do not double-trigger and unplugging MIDI leaves other inputs usable.
+9. Browse backward on the musician device while band state advances. Confirm the live indicator remains accurate and Return to Live restores following without affecting Stage View.
+10. Verify all actions work without a click, track, Presenter, provider account, or any other external application.
 
-> **Real-world ChordPro → Sections → Song Map → Performance Sequence → Stage + Musician Views**
+### 30.3 Offline Operation and Recovery
 
-rather than:
+1. Disconnect WAN while preserving LAN. Continue commands, chart rendering, key changes, and synchronization. Join a fresh browser client and obtain the application, content, and current snapshot locally.
+2. Refresh/disconnect one musician client while the MD advances. Reconnect to the current snapshot, without replaying missed presses or disrupting other clients.
+3. Retry an acknowledged command with the same ID; it must not execute twice. Reject stale-revision commands and invalid section targets without corrupting state.
+4. Edit and save a chart/map locally; connected editors receive the revision. An active session retains its pinned content until the defined explicit apply/restart step.
+5. Restart the host with WAN still disconnected. Verify local library, original sources, maps, keys, provenance, and MIDI mappings survive; offer explicit performance recovery and reconnect clients to its new session.
+6. Confirm licensed source and derived chart content remain organization-local and that no remote asset, login, API, or cloud request is required for the acceptance flow.
 
-> **ChordPro → static formatted document**
+### 30.4 Final Pipeline
+
+```text
+File / Paste / Manual (MVP) ──┐
+Official providers (future) ──┴→ SongProvider
+                                    ↓
+                      Preserved Source + Provenance
+                                    ↓
+                     Parser / Normalized SetFlowSong
+                                    ↓
+                         Reusable Section Definitions
+                                    ↓
+                         Song Map / Saved Arrangement
+                                    ↓
+                    Arrangement Engine / Planned Sequence
+                                    ↓
+MD / Band → Web / Keyboard / MIDI → PerformanceCommand
+                                    ↓
+                        Local Performance Engine
+                                    ↓
+                    Authoritative Performance State
+                                    ↓
+                  Control + Stage + Musician Views (LAN)
+                                    ↓
+                     Optional future integration outputs
+```
+
+**The band's arrangement provides the plan; the MD-directed Performance State provides live truth. Local charts and band displays follow that state without requiring Internet access, slides, or tracks.**
+
+---
