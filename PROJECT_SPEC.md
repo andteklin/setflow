@@ -4,6 +4,10 @@
 
 **SetFlow** is a local-first live worship arrangement system where the band’s arrangement and live Performance State are the source of truth. It converts reusable song sections and Song Maps into chronological charts, then follows the music director (MD) as the band changes course during performance.
 
+The product promise is an **MD-controlled, track-independent, local-first arrangement engine**: one planned arrangement generates musician charts, while live band decisions update those charts and band-facing displays. The initial audience is a worship team that needs spontaneous arrangement changes without operating a playback system.
+
+Shared song maps, arrangement-aware charts, and synchronized displays are not assumed to be unique features. SetFlow must earn its usefulness through their combination with direct MD control, offline LAN operation, and provider-independent local imports. Competitive differentiation is a hypothesis to validate in rehearsal, not a claim that no comparable product exists.
+
 SetFlow separates three concepts that are commonly combined in static worship charts:
 
 1. **Song content** — the reusable musical sections of a song.
@@ -115,9 +119,39 @@ SetFlow is one application with a shared data model and at least three interface
 
 The MD/band controls musical time. SetFlow follows explicit human commands; no click, backing track, audio timeline, tempo clock, or automatic bar detection is required. Tempo and time signature are descriptive metadata. Holding a section does not trigger audio playback or advance on a timer.
 
+Users must be able to create and conduct a performance without creating, loading, or running any playback timeline, including a silent one. Section occurrences express musical order, not timestamps or required durations. Optional future playback integrations must preserve this operating mode.
+
 ### 2.6 Planned Arrangement and Live Authority
 
 The Arrangement Engine expands a saved Song Map into a planned sequence. The Performance Engine owns a session copy and applies live commands to it. Live deviations never silently rewrite the saved arrangement or original song. Stage, Musician, and Control Views consume the same authoritative Performance State.
+
+Three authorities must remain explicit:
+
+| Concern | Authority | Meaning |
+|---|---|---|
+| Planned arrangement | Saved Song Map | The intended order and repetitions before performance. |
+| Live band state | Local Performance Engine | The current occurrence, effective next occurrence, deviations, performance key, and cues. |
+| Congregation presentation | Presentation application and its operator | The actual slide currently displayed, including progression within a musical section. |
+
+SetFlow Stage View always represents live band state. A future presentation adapter may request a slide cue from an accepted band-state transition; it must not assume that the requested slide is actually displayed or feed slide navigation back into band state.
+
+```text
+Saved Song Map → Planned Sequence
+                         ↓
+MD commands → Local Performance Engine → Band State → Charts / Stage
+                                             │
+                                   optional future cue request
+                                             ↓
+                                Presentation app / slides operator
+                                             ↓
+                                  Actual congregation slide
+```
+
+### 2.7 Performance Interaction Priority
+
+The MD must be able to issue common live actions with one deliberate press after setup. Keep Repeat, Next, and configured section jumps immediately available, with exact section variants visible. Do not require opening the Song Map editor or navigating a modal dialog for routine live deviations. Setup may configure song-specific jump mappings; unresolved mappings must be clearly marked before performance.
+
+Current section, repetition or vamp status, and the next section must remain legible on band displays. The rehearsal test in §30.4 determines whether these controls and displays support real musical use.
 
 ## 3. Real-World ChordPro Compatibility
 
@@ -1122,7 +1156,7 @@ SetFlow 0.1 will not provide:
 - SongSelect, PraiseCharts, or other provider APIs; CCLI account authentication or automatic reporting.
 - Cloud accounts, cloud synchronization, hosted content libraries, or cloud backups.
 - Raspberry Pi appliance packaging or custom GPIO controller hardware.
-- QLC+, PRIME, WorshipTools/Presenter, Planning Center, or other external application integrations.
+- ProPresenter, QLC+, PRIME, WorshipTools/Presenter, Planning Center, or other external application integrations.
 - Lighting/DMX control, outgoing MIDI cues, MIDI clock, or automated congregation lyrics.
 - Audio/click/multitrack playback, track synchronization, DAW functionality, or automatic musical-time tracking.
 - Volunteer scheduling, a WorshipTools/Planning Center replacement, or host failover.
@@ -1137,7 +1171,7 @@ Basic MIDI controller **input** is included in MVP; this does not include contro
 Possible future work, independent of the MVP:
 
 - Official PraiseCharts, SongSelect, and other `SongProvider` adapters, subject to access, authorization, and provider terms. Their absence must never prevent local imports or performance.
-- WorshipTools/Presenter, Planning Center, and PRIME interoperability through explicit adapters.
+- ProPresenter as a named future presentation target, with the section-cue boundary defined below; WorshipTools/Presenter, Planning Center, and PRIME interoperability through separate adapters.
 - Outgoing MIDI section cues, including optional mapping from SetFlow sections to presentation lyrics. External presentation state must not silently override band state.
 - QLC+ and other lighting outputs; optional tracks/click integrations that preserve a track-independent operating mode.
 - Raspberry Pi appliance packaging and GPIO input adapters using the existing command path.
@@ -1146,6 +1180,22 @@ Possible future work, independent of the MVP:
 - Explicit section linking with a differences preview; shared and personal musician notes.
 
 Future adapters consume accepted state changes or submit authorized commands through the same gateway. They must avoid feedback loops and fail independently; the local Performance Engine remains authoritative. Core operation does not depend on any integration.
+
+### 29.1 ProPresenter Section-Cue Integration — Future Only
+
+Investigate supported integration mechanisms before selecting a transport or promising compatibility. The initial target is optional section-level cueing, not complete lyric automation or a replacement presentation application.
+
+- Explicitly map a SetFlow song and section ID to a presentation and its section-entry cue. Preserve distinct variants such as C1A and C1C; never infer a safe mapping from the word “Chorus” alone.
+- When following is enabled, an accepted transition to a new occurrence may request its mapped entry cue. This includes a repeated occurrence of the same section. Key changes, cue-text changes, and snapshot refreshes must not retrigger slide navigation.
+- Entering vamp mode alone does not advance slides. An explicit repeated occurrence may request section entry; within-section lyric advancement remains with the presentation operator.
+- Provide a mapping preview/test and an explicit follow enable/disable control. The slides operator must have an accessible way to disengage following. While disabled, navigation is independent; resuming requires an explicit current-section synchronization action.
+- Track requested cues separately from confirmed presentation state. Missing mappings, failed delivery, or unavailable acknowledgement must remain visible without blocking band commands. A successful send is not proof of the displayed slide.
+- Deduplicate outgoing requests by session and accepted transition revision. After reconnecting, do not replay missed cues or automatically jump the presentation to a stale section. Require explicit resynchronization.
+- Do not send an implicit blackout or clear-screen command on `END`; leave the presentation under operator control unless a separate, explicit end-cue mapping is configured.
+
+**Section identity does not determine the current lyric line or slide within that section.** Automatic within-section progression would require a separately specified cue model and operator workflow; it must not be inferred from tempo or elapsed time. ProPresenter and WorshipTools Presenter are separate integration targets.
+
+Future integration acceptance must verify exact variant mappings, repeat behavior, independent slide navigation while following is disabled, explicit resynchronization, and uninterrupted SetFlow operation when the presentation application disconnects. None of these integrations is an MVP dependency.
 
 ---
 
@@ -1178,7 +1228,7 @@ I → V1 → C1A → INST → V2 → C1B → B → C1C → C1D → E
 7. Issue `END`; all views show ended with no current/next target. Distinguish this from jumping to Ending.
 8. Exercise each command through Web UI and keyboard, then through a mapped host-connected MIDI controller. Verify release events do not double-trigger and unplugging MIDI leaves other inputs usable.
 9. Browse backward on the musician device while band state advances. Confirm the live indicator remains accurate and Return to Live restores following without affecting Stage View.
-10. Verify all actions work without a click, track, Presenter, provider account, or any other external application.
+10. Verify all actions work without a click, track, ProPresenter, WorshipTools Presenter, provider account, or any other external application. Do not create, load, or run a playback timeline, even a silent one; leave tempo unset in a separate manual-song fixture and confirm the same command behavior.
 
 ### 30.3 Offline Operation and Recovery
 
@@ -1189,7 +1239,17 @@ I → V1 → C1A → INST → V2 → C1B → B → C1C → C1D → E
 5. Restart the host with WAN still disconnected. Verify local library, original sources, maps, keys, provenance, and MIDI mappings survive; offer explicit performance recovery and reconnect clients to its new session.
 6. Confirm licensed source and derived chart content remain organization-local and that no remote asset, login, API, or cloud request is required for the acceptance flow.
 
-### 30.4 Final Pipeline
+### 30.4 Actual Rehearsal Usability Gate
+
+Run this test with an MD and musicians using the intended stage display and at least one personal device. Configure the controller and section mappings beforehand, then perform without WAN access or a playback timeline.
+
+1. While playing, have the worship leader call “bridge again,” “chorus now,” and “hold here” at unplanned points. The MD must execute each configured action with one deliberate button or key press, without editing the map or opening a dialog.
+2. Confirm musicians can identify the resulting current section, repetition/vamp status, and next section from their displays without asking the MD to explain the screen. Use the exact chorus variant mapped for this rehearsal.
+3. Have one musician browse ahead, then Return to Live. Verify their browsing never changes the band's state and that they can rejoin the current occurrence confidently.
+4. Record command-to-display delay on the actual LAN and note missed, duplicate, or visibly inconsistent transitions. As an initial MVP target, at least 95% of 30 representative commands should appear on every connected test display within 250 ms of host acceptance; no command may be lost or applied twice. Report the device/network setup with the result. This target measures software propagation, separately from the MD's reaction time.
+5. Ask the MD whether control interfered with playing and each musician whether the live display reduced uncertainty. Record specific failures and repeat affected scenarios after correction. Passing transport tests alone does not validate the product if routine controls distract the MD or section changes confuse the band.
+
+### 30.5 Final Pipeline
 
 ```text
 File / Paste / Manual (MVP) ──┐
@@ -1213,9 +1273,13 @@ MD / Band → Web / Keyboard / MIDI → PerformanceCommand
                                     ↓
                   Control + Stage + Musician Views (LAN)
                                     ↓
-                     Optional future integration outputs
+                Optional future adapters (e.g. ProPresenter)
+                                    ↓
+                 Section-entry cue requests, when enabled
+                                    ↓
+                Presentation app / operator controls slides
 ```
 
-**The band's arrangement provides the plan; the MD-directed Performance State provides live truth. Local charts and band displays follow that state without requiring Internet access, slides, or tracks.**
+**The band's arrangement provides the plan; the MD-directed Performance State provides live band truth. Local charts and band displays follow that state without Internet access or any playback timeline. Optional presentation integrations request section cues while the presentation application and its operator retain authority over the actual slides.**
 
 ---
