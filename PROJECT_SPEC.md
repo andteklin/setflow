@@ -251,6 +251,8 @@ interface SongMetadata {
 
 SetFlow must support section boundaries expressed using `{comment: ...}`.
 
+This is the primary and expected section format. SongSelect ChordPro exports mark sections only with `{comment: ...}` directives; they are not expected to contain semantic environment directives. The `setflow-parser-test/src/because-he-lives.cho` fixture is the reference for the format most imported charts will follow.
+
 For SongSelect-style charts:
 
 ```chordpro
@@ -271,11 +273,11 @@ The section continues until:
 - another structural section marker occurs, or
 - the song ends.
 
-### 5.2 Semantic Section Directives
+### 5.2 Semantic Section Directives — Secondary, Not MVP
 
-SetFlow should additionally support standard semantic ChordPro structures where available, such as verse, chorus, bridge, or custom environment directives.
+SongSelect exports do not use semantic environment directives such as `{start_of_verse}` / `{end_of_verse}`, `{start_of_chorus}`, or `{start_of_bridge}`. Supporting them is a secondary compatibility path for hand-written charts or other ChordPro sources, not an MVP requirement.
 
-Semantic directives should take precedence over heuristic comment detection where the source explicitly supplies them.
+If implemented, semantic directives should take precedence over heuristic comment detection where the source explicitly supplies them. Until then, such directives must be preserved verbatim rather than causing import failure.
 
 ### 5.3 Section Recognition
 
@@ -1178,7 +1180,7 @@ Clients automatically reconnect and retrieve current state. WAN loss must have n
 SetFlow 0.1 should include:
 
 1. File, paste, and manual acquisition through `SongProvider`, with no external API dependency.
-2. SongSelect-style metadata, semantic/comment section detection, manual correction, and original-label preservation.
+2. SongSelect-style metadata, `{comment: ...}` section detection, manual correction, and original-label preservation. Semantic section directives (§5.2) are not required.
 3. Chord parsing, chord-only/bar lines, slash chords, transposition, and original-source/unknown-directive preservation.
 4. Distinct chorus variants and automatic Source Order arrangements.
 5. Song Map editor, repeated section references, saved arrangements, setlists, and performance keys.
@@ -1260,7 +1262,7 @@ I → V1 → C1A → INST → V2 → C1B → B → C1C → C1D → E
 2. Detect all ten sections, preserving source labels, order, content, and musical classification.
 3. Keep C1A, C1B, C1C, and C1D distinct; never replace them with one generic chorus.
 4. Preserve chord-only Intro/Instrumental content, bar notation, unknown directives, and original ChordPro.
-5. Preserve uncertain comments as annotations; allow manual conversion/correction and honor explicit semantic boundaries.
+5. Preserve uncertain comments as annotations and allow manual conversion/correction.
 6. Automatically create Source Order. Reorder sections, repeat references, and generate separate stable occurrences without duplicating section definitions.
 7. Transpose chords, including slash bass notes, without altering lyrics, bars, labels, or original source.
 
