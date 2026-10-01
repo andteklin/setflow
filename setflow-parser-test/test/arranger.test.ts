@@ -5,6 +5,7 @@ import { describe, it } from "node:test";
 import {
   applyArrangement,
   classifySectionLabel,
+  formatSongMap,
   occurrenceLabel,
   parseChordPro,
   parseSongMap,
@@ -150,6 +151,56 @@ describe("Morning Lantern sample (chorus variants)", () => {
     for (const s of reparsed.sections.filter((s) => s.type === "bridge")) {
       assert.deepEqual(s.rawLines, bridge.rawLines);
     }
+  });
+});
+
+describe("Harbor Song sample: SongSelect download vs WorshipTools editor", () => {
+  const read = (name: string) => fs.readFileSync(path.join(__dirname, "../src", name), "utf8");
+  const SONGSELECT = read("sample-trailer.songselect.cho");
+  const WORSHIPTOOLS = read("sample-trailer.worshiptools.cho");
+  const MAP = "I,V1,C,V2,C,INST,B*2,C*2,E";
+
+  it("detects the same sections in both sources", () => {
+    const ids = (text: string) => parseChordPro(text).sections.map((s) => s.id);
+    assert.deepEqual(ids(SONGSELECT), ["I", "V1", "C", "V2", "INST", "B", "E"]);
+    assert.deepEqual(ids(WORSHIPTOOLS), ids(SONGSELECT));
+  });
+
+  it("keeps the SongSelect CCLI block out of the Ending section", () => {
+    const song = parseChordPro(SONGSELECT);
+    assert.equal(song.sections.at(-1)!.rawLines.length, 3);
+    assert.match(song.trailer.find((l) => l.trim() !== "")!, /^CCLI Song # 7654322/);
+    assert.deepEqual(parseChordPro(WORSHIPTOOLS).trailer, []);
+  });
+
+  it("round-trips both sources in source order", () => {
+    assert.equal(arrange(SONGSELECT), SONGSELECT.trimEnd() + parseChordPro(SONGSELECT).eol);
+    assert.equal(arrange(WORSHIPTOOLS), WORSHIPTOOLS.trimEnd() + parseChordPro(WORSHIPTOOLS).eol);
+  });
+
+  it("emits the CCLI block once, at the end, however the map ends", () => {
+    const out = arrange(SONGSELECT, "I,E*2,C");
+    assert.equal(out.match(/CCLI Song #/g)!.length, 1);
+    assert.ok(out.trimEnd().endsWith("CCLI License # 1234567"));
+    assert.ok(out.indexOf("{comment: Chorus}") < out.indexOf("CCLI Song #"));
+  });
+
+  it("arranges the WorshipTools source to the same sections as the SongSelect one", () => {
+    const sections = (text: string) => parseChordPro(arrange(text, MAP)).sections;
+    assert.deepEqual(sections(WORSHIPTOOLS), sections(SONGSELECT));
+  });
+
+  it("records the song map so an arranged chart identifies itself", () => {
+    const song = parseChordPro(WORSHIPTOOLS);
+    const items = parseSongMap(MAP, song);
+    const songMap = formatSongMap(items);
+    assert.equal(songMap, "I → V1 → C → V2 → C → INST → B×2 → C×2 → E");
+
+    const out = serializeChordPro(song, applyArrangement(song, items), { songMap });
+    const reparsed = parseChordPro(out);
+    assert.equal(reparsed.songMap, songMap);
+    assert.equal(song.songMap, undefined);
+    assert.deepEqual(parseSongMap(songMap, song), items);
   });
 });
 

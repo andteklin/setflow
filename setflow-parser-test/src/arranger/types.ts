@@ -30,6 +30,10 @@ export interface ParsedSong {
   /** Everything before the first section marker, verbatim (title, key, unknown directives...). */
   metadata: readonly string[];
   sections: readonly SongSection[];
+  /** Plain-text CCLI block after the last section in SongSelect downloads, verbatim. */
+  trailer: readonly string[];
+  /** Song map recorded by a previous SetFlow arrangement (`{x_setflow_map: ...}`). */
+  songMap?: string;
 }
 
 export interface ArrangementItem {

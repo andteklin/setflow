@@ -16,6 +16,13 @@ function resolveSection(song: ParsedSong, name: string): SongSection {
   throw new Error(`Unknown section "${name.trim()}".${hint} Available: ${all}`);
 }
 
+/** Format an arrangement as a song map that `parseSongMap` reads back: "I → V1 → B×2". */
+export function formatSongMap(arrangement: readonly ArrangementItem[]): string {
+  return arrangement
+    .map((item) => (item.repetitions > 1 ? `${item.sectionId}×${item.repetitions}` : item.sectionId))
+    .join(" → ");
+}
+
 /**
  * Parse a compact song map such as "V1,C1A,B*3,C1C×2,E".
  * Separators: `,` `->` `→`. Repeats: `*N` or `×N`. Names match a section id

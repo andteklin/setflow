@@ -1,6 +1,6 @@
 export * from "./types";
 export { classifySectionLabel } from "./sections";
 export { parseChordPro } from "./parse";
-export { parseSongMap } from "./songmap";
+export { formatSongMap, parseSongMap } from "./songmap";
 export { applyArrangement, sourceOrderArrangement } from "./arrange";
-export { occurrenceLabel, serializeChordPro } from "./serialize";
+export { occurrenceLabel, serializeChordPro, type SerializeOptions } from "./serialize";

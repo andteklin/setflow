@@ -2,6 +2,7 @@ import fs from "node:fs";
 import path from "node:path";
 import {
   applyArrangement,
+  formatSongMap,
   parseChordPro,
   parseSongMap,
   serializeChordPro,
@@ -35,6 +36,13 @@ function main(argv: string[]): void {
 
   const song = parseChordPro(fs.readFileSync(file, "utf8"));
 
+  if (song.songMap !== undefined && !list) {
+    throw new Error(
+      `This chart was already arranged by SetFlow (${song.songMap}). ` +
+        "Press Reset in WorshipTools to restore the original chart, then copy it again.",
+    );
+  }
+
   if (list) {
     for (const s of song.sections) {
       console.log(`${s.id.padEnd(6)} ${s.type.padEnd(13)} ${s.sourceLabel}`);
@@ -46,12 +54,10 @@ function main(argv: string[]): void {
   const occurrences = applyArrangement(song, arrangement);
   const outPath =
     output ?? path.join(path.dirname(file), `${path.basename(file, path.extname(file))}.arranged.cho`);
-  fs.writeFileSync(outPath, serializeChordPro(song, occurrences));
+  const songMap = formatSongMap(arrangement);
+  fs.writeFileSync(outPath, serializeChordPro(song, occurrences, { songMap }));
 
-  const summary = arrangement.map((item) =>
-    item.repetitions > 1 ? `${item.sectionId}×${item.repetitions}` : item.sectionId,
-  );
-  console.log(summary.join(" → "));
+  console.log(songMap);
   console.log(`Wrote ${occurrences.length} sections to ${outPath}`);
 }
 
