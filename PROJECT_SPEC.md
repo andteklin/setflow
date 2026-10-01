@@ -51,6 +51,14 @@ All live-performance functionality must operate over a local network without Int
 
 ## 2. Core Design Principles
 
+### Working Name and Product Context
+
+SetFlow remains the working name. OpenMD and MDLive were considered, but [OpenMD](https://openmd.org/) has an existing molecular dynamics use and [MD Live](https://www.mdlive.com/) is an established telehealth brand. No name-availability determination is implied.
+
+Competitors already overlap with this workflow: [Planning Center + ProPresenter share planned sequences](https://www.planningcenter.com/changelog/services/improved-custom-song-sequences-in-plans-are-now-applied-when-importing-into-propresenter), while [MultiTracks Production Cues follow live arrangement changes](https://www.multitracks.com/products/getproductioncues/). SetFlow's intended distinction is the combined track-independent, MD-controlled, local performance workflow.
+
+Weekly preparation and rehearsal currently happen in WorshipTools Charts. The gap between a presentation custom order and the actual musician chart is a motivating pain point, also reported in this [WorshipTools support discussion](https://www.worshiptools.com/help/thread/6219297416282112). Revalidate current product behavior rather than assuming every configuration has the same limitation. Long-term cloud preparation should reduce duplicate maintenance; no WorshipTools connector is required for MVP.
+
 ### 2.1 Local First
 
 Local-first/offline operation is a product requirement. Internet connectivity, cloud login, provider authentication, remote assets, and external APIs must never be required to start or run a performance using locally stored content. The host serves the application and charts entirely over LAN; a fresh client can join and a host can restart with WAN disconnected.
@@ -104,6 +112,8 @@ The source chart defines musical content.
 A SetFlow Arrangement defines performance order.
 
 Multiple arrangements may reference the same song.
+
+Rehearsal arrangement edits change Song Map references and repetition counts, never duplicated chart text. Editing chords or shared section annotations changes the section definition, so all occurrences referencing that version update together. Distinct sections such as C1A/C1B remain independent. Active performances retain pinned versions until an explicit apply/restart; personal notes remain future scope.
 
 ### 2.4 One Application, Multiple Views
 
@@ -950,7 +960,7 @@ Use a host-side MIDI adapter in the supported desktop host environment, so music
 
 ## 20. Control View
 
-Control View runs on the host laptop.
+Control View runs in a browser on the host computer or an authorized LAN device. A future headless Pi host uses the same control interface from a separate device.
 
 It provides:
 
@@ -1051,7 +1061,7 @@ A musician should be able to view the entire generated arrangement while Stage V
 
 ## 23. Real-Time Synchronization
 
-The host is authoritative for Performance State and content revisions. Local WebSockets publish revisioned state snapshots referencing locally available song data. Views render the same session sequence and current/next occurrence IDs; they never infer state by counting button events.
+The host is authoritative for Performance State and the content revisions pinned to the active session. In the local-only MVP it also stores preparation data; future cloud preparation authority is defined in §25.1. Local WebSockets publish revisioned state snapshots referencing locally available song data. Views render the same session sequence and current/next occurrence IDs; they never infer state by counting button events.
 
 A joining or reconnecting client retrieves the current snapshot and matching content before displaying itself as live. Ignore older revisions. A new session ID invalidates stale commands and snapshots from an earlier performance. Commands have acknowledgements and deduplication as defined in §19.3.
 
@@ -1091,6 +1101,8 @@ and display a QR code for musicians to join.
 
 ## 25. Local Persistence
 
+Use SQLite on the local host for structured persistent data, with local files where appropriate for original sources or attachments. The same host application must run directly on Mac, Windows, and Linux. Dedicated hardware is not required.
+
 SetFlow must locally store:
 
 - original ChordPro
@@ -1108,6 +1120,40 @@ SetFlow must locally store:
 Restarting SetFlow must not require Internet connectivity. Recovery presents the last committed snapshot for operator confirmation before resuming; it does not automatically advance the band. A recovered session receives a new session ID so old queued commands cannot apply.
 
 ---
+
+### 25.1 Cloud Preparation and Local Performance — Future Architecture
+
+The long-term model provides a canonical organization preparation library in a managed cloud backend, with a versioned replica on a laptop or Pi. Supabase/Postgres is a candidate, not an MVP dependency. Store users, organizations, memberships/permissions, songs, song versions, sections, arrangements/items, setlists/items, and sync records; use object storage only for necessary permitted attachments.
+
+| Data | Authority when cloud features are enabled |
+|---|---|
+| Accepted preparation songs, versions, maps, sets, and permissions | Organization cloud backend |
+| Offline rehearsal edits | Local drafts pending explicit reconciliation with the canonical version |
+| Active sequence, current/next occurrence, repeats, vamps, cues, and deviations | Local Performance Engine only |
+| Actual congregation slide | Presentation application/operator |
+
+```text
+Preparation clients → Managed cloud API/auth → Organization Postgres library
+                                                   ↕ versioned sync
+                                       Pi / Mac / Windows / Linux host
+                                       SQLite + permitted local content
+                                                   ↓
+MD commands → Local Performance Engine → LAN WebSockets → Band displays
+```
+
+Cloud authority is scoped to preparation data that may legally be stored there. Licensed source and derived chart content remain organization-local unless provider terms explicitly permit cloud storage. Isolate permitted cloud content and access by organization; tenant isolation is necessary but does not itself authorize uploading. For local-only content, sync only permitted metadata/references and require content acquisition on the intended host. Do not create a global copyrighted-song repository.
+
+Before rehearsal/service, sync a complete service snapshot: exact song/section versions, arrangements, keys, cues, required content, and relevant local access configuration. Validate completeness and show readiness or missing items. Activate snapshots atomically; an interrupted download leaves the previous complete snapshot usable. No cloud authentication renewal or remote asset fetch may be required to run the prepared service or join over LAN.
+
+During performance, pin the selected snapshot. Cloud edits cannot move the current section or silently replace content. Store rehearsal preparation edits as drafts with their base revisions; on reconnect, compare versions and resolve conflicting edits explicitly before publishing a new canonical revision. Do not use silent last-write-wins. Keep live deviations separate unless the operator explicitly saves them as a revised arrangement. Apply resulting preparation changes to an active performance only through the existing explicit apply/restart policy.
+
+### 25.2 Optional Raspberry Pi Appliance — Future Deployment
+
+A Pi may run the same local server as a production appliance: Performance Engine/State, SQLite, song/service cache, local WebSockets, and optional supported USB MIDI input. Browsers on musician/control/display devices render charts. Avoid heavy video rendering, congregation production, and audio/multitrack processing on the appliance. Pi packaging, provisioning, GPIO hardware, and device-specific validation are future work; direct computer deployment remains supported.
+
+### 25.3 Deployment Budget Assumptions
+
+The local-only MVP has no required cloud operating cost. Allow roughly **$0–25/month** for an initial small future cloud deployment and optionally **$100–180 once** for a Pi appliance with storage, power, and case. These are planning estimates, not guaranteed quotes; hardware choices, tax, hosting extras, backups, and usage may increase costs. [Supabase pricing](https://supabase.com/pricing) currently offers Free and Pro starting at $25/month. Existing host computers avoid the Pi purchase. Licensing and support may dominate later costs, but provider arrangements and support demand remain unknown. Live LAN command traffic does not require cloud processing.
 
 ## 26. Reliability Requirements
 
@@ -1144,6 +1190,7 @@ SetFlow 0.1 should include:
 11. Local WebSocket snapshots, acknowledgements, revision checks, reconnect behavior, and visible stale-state indicators.
 12. Local persistence, organization-local content handling, and explicit host recovery.
 13. Fully offline startup, fresh client join, editing, transposition, and performance on a working LAN.
+14. Direct host operation on Mac, Windows, and Linux, using local SQLite; no Pi or cloud account required.
 
 MIDI controller input is MVP. External MIDI outputs and integrations remain outside MVP. No click or track is needed to exercise any live feature.
 
@@ -1249,7 +1296,20 @@ Run this test with an MD and musicians using the intended stage display and at l
 4. Record command-to-display delay on the actual LAN and note missed, duplicate, or visibly inconsistent transitions. As an initial MVP target, at least 95% of 30 representative commands should appear on every connected test display within 250 ms of host acceptance; no command may be lost or applied twice. Report the device/network setup with the result. This target measures software propagation, separately from the MD's reaction time.
 5. Ask the MD whether control interfered with playing and each musician whether the live display reduced uncertainty. Record specific failures and repeat affected scenarios after correction. Passing transport tests alone does not validate the product if routine controls distract the MD or section changes confuse the band.
 
-### 30.5 Final Pipeline
+### 30.5 Editing and Portable-Host Acceptance — MVP
+
+1. Change B×2 to B×4 in the Song Map; confirm four chronological occurrences reference one section definition and no copied chart bodies are created.
+2. Change a chord and shared annotation in that section; confirm every occurrence using the edited version updates, while other section definitions and the original source remain intact. Preserve a pinned active session until explicit apply/restart.
+3. Verify C1A edits do not alter C1B/C1C/C1D. Personal notes are not required for this test.
+4. Run the core import, SQLite save/restart, LAN join, Web/keyboard command, and WAN-disconnected performance flow on documented Mac, Windows, and Linux host environments. Document the separately validated MVP MIDI controller/host combination.
+
+### 30.6 Future-Phase Acceptance — Not MVP Gates
+
+When cloud sync is implemented, test complete pre-service downloads, interrupted sync retaining the last valid snapshot, offline startup/join, and missing-content readiness failures. Edit the same map offline and in cloud; verify explicit conflict reconciliation and no overwrite of active performance state. Confirm a saved rehearsal revision updates the canonical preparation library only after reconciliation, while live deviations remain local unless explicitly saved.
+
+Test organization access isolation, provider storage restrictions for originals and derived content, and exclusion of prohibited content from uploads/backups. When Pi packaging is implemented, validate the live workflow on the chosen hardware without heavy production workloads. Presentation integration retains its separate future acceptance requirements in §29.1.
+
+### 30.7 Final Pipeline
 
 ```text
 File / Paste / Manual (MVP) ──┐
