@@ -170,13 +170,13 @@ SetFlow must prioritize compatibility with ChordPro files produced by common wor
 A typical SongSelect import may resemble:
 
 ```chordpro
-{title: Because He Lives (Amen)}
-{artist: Chris Tomlin, Daniel Carson, Ed Cash, ...}
+{title: Morning Lantern (Example)}
+{artist: SetFlow Example Writers}
 {key: C}
 {time: 4/4}
 {tempo: 84}
-{ccli_license: 11488782}
-{ccli: 7027887}
+{ccli_license: 1234567}
+{ccli: 7654321}
 {copyright: ...}
 {footer: ...}
 
@@ -184,10 +184,10 @@ A typical SongSelect import may resemble:
 [|] [Am]    [F]    [|] [C]    [|]
 
 {comment: Verse 1}
-I be - [Am]lieve in the [F]Son, [C] ...
+Light the [Am]lamp be - [F]fore the [C]dawn ...
 
 {comment: Chorus 1a}
-A - [F]men, [G]a [Am]- men
+Shine [F]on, [G]shine [Am]on
 ...
 
 {comment: Instrumental}
@@ -200,7 +200,7 @@ A - [F]men, [G]a [Am]- men
 ...
 
 {comment: Ending}
-Because He [Am]lives [F] [C]
+Morning [Am]light [F] [C]
 ```
 
 SetFlow must correctly interpret this style of file.
@@ -251,7 +251,7 @@ interface SongMetadata {
 
 SetFlow must support section boundaries expressed using `{comment: ...}`.
 
-This is the primary and expected section format. SongSelect ChordPro exports mark sections only with `{comment: ...}` directives; they are not expected to contain semantic environment directives. The `setflow-parser-test/src/because-he-lives.cho` fixture is the reference for the format most imported charts will follow.
+This is the primary and expected section format. SongSelect ChordPro exports mark sections only with `{comment: ...}` directives; they are not expected to contain semantic environment directives. The `setflow-parser-test/src/sample-variants.cho` fixture is the reference for the format most imported charts will follow.
 
 For SongSelect-style charts:
 
@@ -405,7 +405,7 @@ interface SongSection {
 For the supplied SongSelect example, parsing should produce approximately:
 
 ```text
-Song: Because He Lives (Amen)
+Song: Morning Lantern (Example)
 
 Sections
 ──────────────────────
@@ -622,14 +622,14 @@ Inline ChordPro chords must be represented independently from lyrics.
 For example:
 
 ```chordpro
-Because He [C]lives, [F]I can face to - [G]morrow
+Over the [C]water, [F]over the [G]hillside
 ```
 
 should conceptually become:
 
 ```text
-Because He lives, I can face tomorrow
-           C      F             G
+Over the water, over the hillside
+         C      F        G
 ```
 
 while preserving exact chord positions.
@@ -774,11 +774,11 @@ Example:
 ┌────────────────────────────────────────────┐
 │ IMPORT SONG                               │
 │                                            │
-│ Because He Lives (Amen)                   │
-│ Chris Tomlin, Daniel Carson, ...          │
+│ Morning Lantern (Example)                 │
+│ SetFlow Example Writers                   │
 │                                            │
 │ Key: C        Tempo: 84        Time: 4/4  │
-│ CCLI: 7027887                              │
+│ CCLI: 7654321                              │
 │                                            │
 │ DETECTED SECTIONS                          │
 │                                            │
@@ -987,10 +987,10 @@ Example:
 +-------------------------------------------------------+
 | SETFLOW                    Fall Getaway — Session 2   |
 +----------------+--------------------------------------+
-| SETLIST        | BECAUSE HE LIVES (AMEN)             |
+| SETLIST        | MORNING LANTERN (EXAMPLE)           |
 |                | Key: C      BPM: 84      4/4        |
 | Song 1         |                                      |
-| Because He...  | ARRANGEMENT                          |
+| Morning La...  | ARRANGEMENT                          |
 | Song 3         |                                      |
 | Song 4         | I → V1 → C1A → INST → V2 → C1B     |
 |                | → B → C1C → C1D → E                 |
@@ -1020,21 +1020,21 @@ Example:
 
 ```text
 ┌──────────────────────────────┐
-│ BECAUSE HE LIVES       C     │
+│ MORNING LANTERN        C     │
 │                              │
 │            BRIDGE            │
 │                              │
 │ C                            │
-│ Because He lives,            │
+│ Over the water,              │
 │                              │
-│ F                  G         │
-│ I can face tomorrow          │
+│ F        G                   │
+│ over the hillside            │
 │                              │
 │ C                            │
-│ Because He lives             │
+│ Over the valley              │
 │                              │
-│ F                 G          │
-│ Every fear is gone           │
+│ F          G                 │
+│ out to the sea               │
 │                              │
 │                              │
 │ NEXT: CHORUS 1C              │
@@ -1252,7 +1252,7 @@ Future integration acceptance must verify exact variant mappings, repeat behavio
 
 ### 30.1 Preserve Real-World Import Behavior
 
-Use the original SongSelect-style "Because He Lives (Amen)" fixture with metadata and these ten sections:
+Use the SongSelect-style sample fixture (`setflow-parser-test/src/sample-variants.cho`) with metadata and these ten sections:
 
 ```text
 I → V1 → C1A → INST → V2 → C1B → B → C1C → C1D → E
