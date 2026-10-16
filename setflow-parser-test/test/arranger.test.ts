@@ -22,6 +22,12 @@ function arrange(source: string, map?: string): string {
   return serializeChordPro(song, applyArrangement(song, items));
 }
 
+function bySong(song: ParsedSong, token: string) {
+  const section = song.sections.find((s) => s.token === token);
+  if (!section) throw new Error(`No section with token ${token}`);
+  return section;
+}
+
 function labels(song: ParsedSong, map: string): string[] {
   const byId = new Map(song.sections.map((s) => [s.id, s]));
   return applyArrangement(song, parseSongMap(map, song)).map((o) =>
@@ -45,12 +51,14 @@ describe("section labels", () => {
       ["Outro", "outro", "O"],
     ];
     for (const [raw, type, label] of cases) {
-      assert.deepEqual(classifySectionLabel(raw), { type, label }, raw);
+      const c = classifySectionLabel(raw);
+      assert.equal(c?.type, type, raw);
+      assert.equal(c?.token, label, raw);
     }
   });
 
   it("ignores a generated repeat counter", () => {
-    assert.deepEqual(classifySectionLabel("Chorus 1c 2/2"), { type: "chorus", label: "C1C" });
+    assert.equal(classifySectionLabel("Chorus 1c 2/2")?.token, "C1C");
   });
 
   it("does not treat performance notes as sections", () => {
@@ -64,7 +72,7 @@ describe("Morning Lantern sample (chorus variants)", () => {
 
   it("detects all ten sections in source order with source labels preserved", () => {
     assert.deepEqual(
-      song.sections.map((s) => [s.id, s.type, s.sourceLabel]),
+      song.sections.map((s) => [s.token, s.type, s.sourceLabel]),
       [
         ["I", "intro", "Intro"],
         ["V1", "verse", "Verse 1"],
@@ -96,9 +104,9 @@ describe("Morning Lantern sample (chorus variants)", () => {
 
   it("preserves chord-only bar lines and slash chords byte-for-byte", () => {
     const sourceLines = FIXTURE.split(/\r?\n/);
-    const intro = song.sections.find((s) => s.id === "I")!;
+    const intro = bySong(song, "I");
     assert.deepEqual(intro.rawLines, [sourceLines[11]]);
-    const bridge = song.sections.find((s) => s.id === "B")!;
+    const bridge = bySong(song, "B");
     assert.ok(bridge.rawLines[2].includes("[C/E]"));
     assert.deepEqual(bridge.rawLines, sourceLines.slice(37, 40));
   });
@@ -134,7 +142,7 @@ describe("Morning Lantern sample (chorus variants)", () => {
     const occurrences = applyArrangement(song, parseSongMap("B*4", song));
     assert.equal(occurrences.length, 4);
     assert.equal(new Set(occurrences.map((o) => o.id)).size, 4);
-    assert.ok(occurrences.every((o) => o.sectionId === "B"));
+    assert.ok(occurrences.every((o) => o.sectionId === bySong(song, "B").id));
     assert.deepEqual(song.sections, before);
     assert.ok(Object.isFrozen(song.sections[0].rawLines));
   });
@@ -147,7 +155,7 @@ describe("Morning Lantern sample (chorus variants)", () => {
       reparsed.sections.map((s) => s.sourceLabel),
       ["Verse 1", "Chorus 1a", "Bridge 1/3", "Bridge 2/3", "Bridge 3/3", "Chorus 1d", "Ending"],
     );
-    const bridge = song.sections.find((s) => s.id === "B")!;
+    const bridge = bySong(song, "B");
     for (const s of reparsed.sections.filter((s) => s.type === "bridge")) {
       assert.deepEqual(s.rawLines, bridge.rawLines);
     }
@@ -161,7 +169,7 @@ describe("Harbor Song sample: SongSelect download vs WorshipTools editor", () =>
   const MAP = "I,V1,C,V2,C,INST,B*2,C*2,E";
 
   it("detects the same sections in both sources", () => {
-    const ids = (text: string) => parseChordPro(text).sections.map((s) => s.id);
+    const ids = (text: string) => parseChordPro(text).sections.map((s) => s.token);
     assert.deepEqual(ids(SONGSELECT), ["I", "V1", "C", "V2", "INST", "B", "E"]);
     assert.deepEqual(ids(WORSHIPTOOLS), ids(SONGSELECT));
   });
@@ -193,7 +201,7 @@ describe("Harbor Song sample: SongSelect download vs WorshipTools editor", () =>
   it("records the song map so an arranged chart identifies itself", () => {
     const song = parseChordPro(WORSHIPTOOLS);
     const items = parseSongMap(MAP, song);
-    const songMap = formatSongMap(items);
+    const songMap = formatSongMap(song, items);
     assert.equal(songMap, "I → V1 → C → V2 → C → INST → B×2 → C×2 → E");
 
     const out = serializeChordPro(song, applyArrangement(song, items), { songMap });
@@ -272,13 +280,13 @@ describe("simple single-chorus song", () => {
     assert.throws(() => parseSongMap("V1,X", song), /Unknown section "X"/);
     assert.throws(() => parseSongMap("B*0", song), /at least 1/);
     assert.throws(() => parseSongMap(" , ", song), /empty/);
-    assert.throws(() => applyArrangement(song, [{ sectionId: "B", repetitions: 1.5 }]), /Invalid repetition/);
+    assert.throws(() => applyArrangement(song, [{ sectionId: bySong(song, "B").id, repetitions: 1.5 }]), /Invalid repetition/);
   });
 
   it("keeps performance-note comments inside their section", () => {
     const song = parseChordPro(SOURCE.replace("[G]Bridge line", "{comment: Build here}\n[G]Bridge line"));
     assert.equal(song.sections.length, 5);
-    assert.deepEqual(song.sections.find((s) => s.id === "B")!.rawLines, ["{comment: Build here}", "[G]Bridge line"]);
+    assert.deepEqual(bySong(song, "B").rawLines, ["{comment: Build here}", "[G]Bridge line"]);
   });
 
   it("preserves CRLF line endings", () => {

@@ -1,24 +1,22 @@
-export type SectionType =
-  | "intro"
-  | "verse"
-  | "prechorus"
-  | "chorus"
-  | "bridge"
-  | "instrumental"
-  | "interlude"
-  | "tag"
-  | "ending"
-  | "outro";
-
-/** A section *definition*: reusable content, never mutated after parsing. */
+/**
+ * A section *definition*: reusable content, never mutated after parsing.
+ *
+ * Four things are kept apart: `id` (identity), `sourceLabel` (what the chart
+ * said), `type` (classification) and `token` (the short song-map name). The
+ * token is a label for people; nothing should be keyed on it except song-map
+ * text, and two sections of the same type never share content or identity.
+ */
 export interface SongSection {
-  /** Unique within the song. Usually the normalized label (e.g. "C1A"). */
+  /** Opaque identity, unique within the song and independent of the label or token. */
   id: string;
-  /** Label exactly as written in the source, e.g. "Chorus 1a". */
+  /** Label exactly as written in the source, e.g. "Pre Chorus". Never rewritten. */
   sourceLabel: string;
-  /** Normalized label, e.g. "C1A". */
-  label: string;
-  type: SectionType;
+  /** Readable normalized label, e.g. "Chorus 1A"; the source text for custom sections. */
+  displayLabel: string;
+  /** Short song-map name, unique within the song, e.g. "C1A", "PC", or "BC" for a custom "Big Chorus". */
+  token: string;
+  /** Vocabulary type id (see sectionTypes.ts), or "custom" when the name is not in it. */
+  type: string;
   /** Body lines exactly as in the source (chords, bars, annotations, inner blanks). */
   rawLines: readonly string[];
   sourceOrder: number;

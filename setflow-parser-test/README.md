@@ -44,6 +44,20 @@ WorshipTools first.
   the full labels (`Verse 1`). Variants such as `C1A` and `C1B` are never
   merged; a bare `C` is rejected when only variants exist.
 
+### Section names
+
+Section names are normalized by the vocabulary in
+`src/arranger/sectionTypes.ts` (Intro, Verse, Pre-Chorus, Chorus, Refrain,
+Bridge, Instrumental, Interlude, Solo, Tag, Vamp, Turnaround, Breakdown,
+Outro, Ending, Count-In, Click, ...). Case, spaces and hyphens don't matter,
+and numbers/letters are kept (`Chorus 1a` → `C1A`). The original label is
+always preserved in the output chart.
+
+A name outside the vocabulary (`Spontaneous`, `Big Chorus`) is a custom
+section with its own generated short name (`SPON`, `BIGC`) when it stands
+alone after a blank line, is short, and is followed directly by chart lines.
+Comments inside a section such as `{comment: Build here}` stay annotations.
+
 ## Command line
 
 ```bash

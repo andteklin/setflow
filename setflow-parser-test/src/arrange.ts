@@ -45,7 +45,7 @@ function main(argv: string[]): void {
 
   if (list) {
     for (const s of song.sections) {
-      console.log(`${s.id.padEnd(6)} ${s.type.padEnd(13)} ${s.sourceLabel}`);
+      console.log(`${s.token.padEnd(8)} ${s.type.padEnd(13)} ${s.sourceLabel}`);
     }
     return;
   }
@@ -54,7 +54,7 @@ function main(argv: string[]): void {
   const occurrences = applyArrangement(song, arrangement);
   const outPath =
     output ?? path.join(path.dirname(file), `${path.basename(file, path.extname(file))}.arranged.cho`);
-  const songMap = formatSongMap(arrangement);
+  const songMap = formatSongMap(song, arrangement);
   fs.writeFileSync(outPath, serializeChordPro(song, occurrences, { songMap }));
 
   console.log(songMap);

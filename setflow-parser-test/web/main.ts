@@ -61,12 +61,12 @@ function renderSections(song: ParsedSong | null): void {
       const button = document.createElement("button");
       button.type = "button";
       const id = document.createElement("b");
-      id.textContent = section.id;
+      id.textContent = section.token;
       button.append(id, section.sourceLabel);
       button.title = `Add ${section.sourceLabel} to the map`;
       button.addEventListener("click", () => {
         const map = mapInput.value.trim();
-        mapInput.value = map ? `${map}, ${section.id}` : section.id;
+        mapInput.value = map ? `${map}, ${section.token}` : section.token;
         update();
       });
       return button;
@@ -116,7 +116,7 @@ function update(): void {
     const occurrences = applyArrangement(song, items);
     const byId = new Map(song.sections.map((s) => [s.id, s]));
 
-    output.value = serializeChordPro(song, occurrences, { songMap: formatSongMap(items) });
+    output.value = serializeChordPro(song, occurrences, { songMap: formatSongMap(song, items) });
     copyButton.disabled = false;
     sequenceEl.replaceChildren(
       ...occurrences.map((occ) => {
@@ -152,7 +152,7 @@ $<HTMLButtonElement>("undo").addEventListener("click", () => {
 
 $<HTMLButtonElement>("source-order").addEventListener("click", () => {
   const song = parseChordPro(source.value);
-  mapInput.value = formatSongMap(sourceOrderArrangement(song)).replaceAll(" → ", ", ");
+  mapInput.value = formatSongMap(song, sourceOrderArrangement(song)).replaceAll(" → ", ", ");
   update();
 });
 
