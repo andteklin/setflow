@@ -7,7 +7,7 @@ import {
   serializeChordPro,
   sourceOrderArrangement,
   type ParsedSong,
-} from "../src/arranger";
+} from "@setflow/core";
 
 const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
 

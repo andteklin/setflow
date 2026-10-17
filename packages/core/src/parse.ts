@@ -1,5 +1,5 @@
-import { normalizeSectionLabel, suggestCustomTokens, type SectionClassification } from "./sections";
-import type { ParsedSong, SongSection } from "./types";
+import { normalizeSectionLabel, suggestCustomTokens, type SectionClassification } from "./sections.js";
+import type { ParsedSong, SongSection } from "./types.js";
 
 const COMMENT_RE = /^\s*\{\s*(?:comment|c)\s*:\s*(.*?)\s*\}\s*$/i;
 const SONG_MAP_RE = /^\s*\{\s*x_setflow_map\s*:\s*(.*?)\s*\}\s*$/i;

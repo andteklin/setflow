@@ -1,4 +1,4 @@
-import { CUSTOM_TYPE_ID, findSectionType } from "./sectionTypes";
+import { CUSTOM_TYPE_ID, findSectionType } from "./sectionTypes.js";
 
 // Name, optional number, optional letter: "Verse 1", "Chorus 1a", "Chorus A", "Bridge".
 // A trailing repeat counter ("Bridge 2/3") is accepted so arranged output re-imports.

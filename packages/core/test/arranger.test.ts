@@ -12,9 +12,9 @@ import {
   serializeChordPro,
   sourceOrderArrangement,
   type ParsedSong,
-} from "../src/arranger";
+} from "../src/index.js";
 
-const FIXTURE = fs.readFileSync(path.join(__dirname, "../src/sample-variants.cho"), "utf8");
+const FIXTURE = fs.readFileSync(path.join(import.meta.dirname, "fixtures/sample-variants.cho"), "utf8");
 
 function arrange(source: string, map?: string): string {
   const song = parseChordPro(source);
@@ -163,7 +163,7 @@ describe("Morning Lantern sample (chorus variants)", () => {
 });
 
 describe("Harbor Song sample: SongSelect download vs WorshipTools editor", () => {
-  const read = (name: string) => fs.readFileSync(path.join(__dirname, "../src", name), "utf8");
+  const read = (name: string) => fs.readFileSync(path.join(import.meta.dirname, "fixtures", name), "utf8");
   const SONGSELECT = read("sample-trailer.songselect.cho");
   const WORSHIPTOOLS = read("sample-trailer.worshiptools.cho");
   const MAP = "I,V1,C,V2,C,INST,B*2,C*2,E";

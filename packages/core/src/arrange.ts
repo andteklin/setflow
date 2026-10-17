@@ -1,4 +1,4 @@
-import type { ArrangementItem, ParsedSong, SectionOccurrence } from "./types";
+import type { ArrangementItem, ParsedSong, SectionOccurrence } from "./types.js";
 
 /** Default arrangement: every section once, in source order (spec §10). */
 export function sourceOrderArrangement(song: ParsedSong): ArrangementItem[] {
@@ -31,6 +31,7 @@ export function applyArrangement(
     for (let i = start; i < end; i++) {
       occurrences.push({
         id: `occ-${i + 1}`,
+        origin: "planned",
         sectionId: flat[i],
         occurrenceIndex: i,
         repetitionIndex: i - start,

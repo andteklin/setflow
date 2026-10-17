@@ -4,7 +4,6 @@
     "module": "esnext",
     "moduleResolution": "bundler",
     "strict": true,
-    "noEmit": true,
     "esModuleInterop": true,
     "skipLibCheck": true,
     "types": [
@@ -14,11 +13,11 @@
       "es2022",
       "dom",
       "dom.iterable"
-    ]
+    ],
+    "noEmit": true
   },
   "include": [
     "src",
-    "test",
     "web"
   ]
 }

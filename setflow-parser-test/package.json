@@ -6,7 +6,6 @@
   "scripts": {
     "ui": "vite web --open",
     "arrange": "tsx src/arrange.ts",
-    "test": "node --import tsx --test test/*.test.ts",
     "typecheck": "tsc --noEmit"
   },
   "keywords": [],
@@ -14,6 +13,7 @@
   "license": "ISC",
   "type": "commonjs",
   "dependencies": {
+    "@setflow/core": "*",
     "chordsheetjs": "^17.0.0"
   },
   "devDependencies": {

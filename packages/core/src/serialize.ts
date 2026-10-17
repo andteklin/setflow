@@ -1,4 +1,4 @@
-import type { ParsedSong, SectionOccurrence, SongSection } from "./types";
+import type { ParsedSong, SectionOccurrence, SongSection } from "./types.js";
 
 /** "Bridge" when played once in a row, "Bridge 2/3" within a repeated run. */
 export function occurrenceLabel(section: SongSection, occ: SectionOccurrence): string {

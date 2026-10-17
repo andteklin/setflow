@@ -7,7 +7,7 @@ import {
   parseSongMap,
   serializeChordPro,
   sourceOrderArrangement,
-} from "./arranger";
+} from "@setflow/core";
 
 const USAGE = `Usage: tsx src/arrange.ts <song.cho> [song-map] [-o out.cho] [--list]
 

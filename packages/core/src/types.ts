@@ -1,3 +1,59 @@
+/**
+ * A section *definition*: reusable content, never mutated after parsing.
+ *
+ * Four things are kept apart: `id` (identity), `sourceLabel` (what the chart
+ * said), `type` (classification) and `token` (the short song-map name). The
+ * token is a label for people; nothing should be keyed on it except song-map
+ * text, and two sections of the same type never share content or identity.
+ */
+export interface SongSection {
+  /** Opaque identity, unique within the song and independent of the label or token. */
+  id: string;
+  /** Label exactly as written in the source, e.g. "Pre Chorus". Never rewritten. */
+  sourceLabel: string;
+  /** Readable normalized label, e.g. "Chorus 1A"; the source text for custom sections. */
+  displayLabel: string;
+  /** Short song-map name, unique within the song, e.g. "C1A", "PC", or "BC" for a custom "Big Chorus". */
+  token: string;
+  /** Vocabulary type id (see sectionTypes.ts), or "custom" when the name is not in it. */
+  type: string;
+  /** Body lines exactly as in the source (chords, bars, annotations, inner blanks). */
+  rawLines: readonly string[];
+  sourceOrder: number;
+}
+
+export interface ParsedSong {
+  /** Line ending detected in the source ("\n" or "\r\n"). */
+  eol: string;
+  /** Everything before the first section marker, verbatim (title, key, unknown directives...). */
+  metadata: readonly string[];
+  sections: readonly SongSection[];
+  /** Plain-text CCLI block after the last section in SongSelect downloads, verbatim. */
+  trailer: readonly string[];
+  /** Song map recorded by a previous SetFlow arrangement (`{x_setflow_map: ...}`). */
+  songMap?: string;
+}
+
+export interface ArrangementItem {
+  sectionId: string;
+  repetitions: number;
+}
+
+/** A section *occurrence*: one visit to a section definition in an arrangement. */
+export interface SectionOccurrence {
+  id: string;
+  /** "planned" when expanded from a saved arrangement, "live" when inserted during performance. */
+  origin: "planned" | "live";
+  sectionId: string;
+  /** Position in the arranged sequence (0-based). */
+  occurrenceIndex: number;
+  /** Position within the contiguous run of this section (0-based). */
+  repetitionIndex: number;
+  /** Length of the contiguous run of this section. */
+  repetitionCount: number;
+}
+
+/** Structured view of the common metadata directives (spec §4). The verbatim lines stay in `ParsedSong.metadata`. */
 export interface SongMetadata {
   title: string;
   artist?: string;
@@ -8,103 +64,20 @@ export interface SongMetadata {
   ccliLicense?: string;
   copyright?: string;
   footer?: string;
-  /**
-   * Any metadata directive SetFlow doesn't map to a structured field
-   * (e.g. {capo: ...}), preserved verbatim so import -> export doesn't
-   * lose information.
-   */
+  /** Every other directive, by name, e.g. `{capo: 2}` → `{ capo: "2" }`. */
   extra: Record<string, string>;
 }
 
-export type SectionType =
-  | "intro"
-  | "verse"
-  | "prechorus"
-  | "chorus"
-  | "bridge"
-  | "instrumental"
-  | "interlude"
-  | "tag"
-  | "ending"
-  | "outro"
-  | "custom";
-
-/** One chord placed at a character offset within a lyric/chord line. */
+/** One chord anchored at a character offset into `ChartLine.lyrics`. */
 export interface ChordPlacement {
-  /** Character offset into ChartLine.lyrics where this chord is anchored. */
   offset: number;
-  /** Chord exactly as written in the source (e.g. "G/B", "Am7"). */
+  /** Chord exactly as written, e.g. "G/B", or "|" for a bar marker. */
   chord: string;
 }
 
-/**
- * A single line of chart content. `lyrics` holds the line's text with all
- * inline chord brackets stripped out; `chords` records where each chord
- * belonged so the two can be re-combined for rendering or transposition
- * without one clobbering the other.
- */
-export interface ChartLine {
-  lyrics: string;
-  chords: ChordPlacement[];
-  /** True for lines that carry no lyric text at all (e.g. instrumental bars). */
-  isChordOnly: boolean;
-}
-
-/**
- * A structural comment (or other freeform note) that SetFlow could not
- * confidently classify as a section boundary. Preserved rather than
- * discarded so the user can promote it to a section later.
- */
-export interface SongAnnotation {
-  id: string;
-  text: string;
-  /** sourceOrder of the section this annotation immediately precedes/follows. */
-  afterSectionOrder: number;
-}
-
-export interface SongSection {
-  id: string;
-
-  // Source identity
-  sourceLabel: string;
-
-  // Normalized SetFlow representation
-  label: string;
-  type: SectionType;
-
-  lines: ChartLine[];
-
-  sourceOrder: number;
-}
-
-export interface ParsedSong {
-  metadata: SongMetadata;
-  sections: SongSection[];
-  annotations: SongAnnotation[];
-  /** The untouched ChordPro text as imported, kept for editing/export/reparsing. */
-  originalChordPro: string;
-}
-
-export interface ArrangementItem {
-  sectionId: string;
-  repetitions: number;
-}
-
-export interface Arrangement {
-  id: string;
-  songId: string;
-  name: string;
-  items: ArrangementItem[];
-}
-
-export interface SectionOccurrence {
-  sectionId: string;
-  /** Position of this occurrence within the full performance sequence (0-based). */
-  occurrenceIndex: number;
-  /** Which repetition of its arrangement item this is (0-based). */
-  repetitionIndex: number;
-  /** Total repetitions requested for this arrangement item. */
-  repetitionCount: number;
-}
-
-export const SOURCE_ORDER_ARRANGEMENT_NAME = "Source Order";
+/** A section body line split into renderable parts. Derived from `rawLines`, never stored instead of them. */
+export type ChartLine =
+  | { kind: "music"; lyrics: string; chords: ChordPlacement[]; isChordOnly: boolean }
+  | { kind: "comment"; text: string }
+  | { kind: "directive"; name: string; value: string }
+  | { kind: "blank" };

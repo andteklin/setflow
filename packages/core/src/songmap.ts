@@ -1,4 +1,4 @@
-import type { ArrangementItem, ParsedSong, SongSection } from "./types";
+import type { ArrangementItem, ParsedSong, SongSection } from "./types.js";
 
 const norm = (s: string) => s.trim().replace(/\s+/g, " ").toLowerCase();
 

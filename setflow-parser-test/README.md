@@ -7,7 +7,7 @@ back into WorshipTools.
 ## Setup (once)
 
 1. Install [Node.js](https://nodejs.org) 20.19 or newer (the LTS download).
-2. In a terminal, from this folder:
+2. In a terminal, from the repository root (the folder above this one):
 
    ```bash
    npm install
@@ -47,7 +47,7 @@ WorshipTools first.
 ### Section names
 
 Section names are normalized by the vocabulary in
-`src/arranger/sectionTypes.ts` (Intro, Verse, Pre-Chorus, Chorus, Refrain,
+`packages/core/src/sectionTypes.ts` (Intro, Verse, Pre-Chorus, Chorus, Refrain,
 Bridge, Instrumental, Interlude, Solo, Tag, Vamp, Turnaround, Breakdown,
 Outro, Ending, Count-In, Click, ...). Case, spaces and hyphens don't matter,
 and numbers/letters are kept (`Chorus 1a` → `C1A`). The original label is
@@ -66,6 +66,10 @@ npm run arrange -- song.cho --list                        # show detected sectio
 ```
 
 ## Development
+
+The parser, song maps and arrangement logic live in `packages/core`
+(`@setflow/core`); this folder is only the UI and command line on top of it.
+From the repository root:
 
 ```bash
 npm test

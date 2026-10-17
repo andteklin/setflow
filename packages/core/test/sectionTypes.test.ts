@@ -11,7 +11,7 @@ import {
   serializeChordPro,
   sourceOrderArrangement,
   type ParsedSong,
-} from "../src/arranger";
+} from "../src/index.js";
 
 // Made-up chart in SongSelect style: every section is a {comment: ...} marker.
 const CHART = `{title: Lantern Hymn (Example)}
