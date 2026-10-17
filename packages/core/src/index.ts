@@ -7,3 +7,23 @@ export { formatSongMap, parseSongMap } from "./songmap.js";
 export { applyArrangement, sourceOrderArrangement } from "./arrange.js";
 export { occurrenceLabel, serializeChordPro, type SerializeOptions } from "./serialize.js";
 export { semitoneDistance, transposeChartLine, transposeChord } from "./transpose.js";
+export {
+  applyCommand,
+  createPerformance,
+  setCues,
+  setPerformanceKey,
+  type LiveDeviation,
+  type PerformanceCommand,
+  type PerformanceInit,
+  type PerformanceState,
+  type TransitionContext,
+  type TransitionResult,
+} from "./performance.js";
+export {
+  PerformanceSession,
+  type CommandAck,
+  type CommandEnvelope,
+  type InputSource,
+  type RejectReason,
+  type SessionInit,
+} from "./session.js";
