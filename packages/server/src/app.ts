@@ -5,23 +5,11 @@ import path from "node:path";
 import { WebSocketServer, type WebSocket } from "ws";
 import type { CommandEnvelope } from "@setflow/core";
 import { HttpError, Library } from "./library.js";
-import { LiveHost, type LiveStatus } from "./live.js";
+import { LiveHost } from "./live.js";
+import type { ClientMessage, ClientRole, ServerMessage } from "./protocol.js";
 import { Store } from "./store.js";
 
-export type ClientRole = "control" | "stage" | "musician";
-
-/** Messages the host sends over the LAN WebSocket. */
-export type ServerMessage =
-  | { type: "status"; status: LiveStatus }
-  | { type: "ack"; ack: ReturnType<LiveHost["submit"]> }
-  | { type: "clients"; clients: Array<{ clientId: string; role: ClientRole }> }
-  | { type: "library" }
-  | { type: "error"; message: string };
-
-/** Messages clients send. Commands carry the same envelope as the HTTP endpoint. */
-export type ClientMessage =
-  | { type: "hello"; clientId: string; role: ClientRole }
-  | { type: "command"; envelope: CommandEnvelope };
+export type * from "./protocol.js";
 
 export interface AppOptions {
   /** SQLite file, or ":memory:" for tests. */
@@ -137,6 +125,8 @@ export function createApp(options: AppOptions) {
   });
 
   const wss = new WebSocketServer({ server, path: "/ws" });
+  // ws re-emits the HTTP server's errors; listen() reports those, so don't crash here.
+  wss.on("error", () => {});
   wss.on("connection", (ws) => {
     sockets.set(ws, null);
     let alive = true;
@@ -184,8 +174,10 @@ export function createApp(options: AppOptions) {
     library,
     live,
     listen(listenPort: number, host = "0.0.0.0"): Promise<number> {
-      return new Promise((resolve) => {
+      return new Promise((resolve, reject) => {
+        server.once("error", reject);
         server.listen(listenPort, host, () => {
+          server.off("error", reject);
           boundPort = (server.address() as { port: number }).port;
           resolve(boundPort);
         });

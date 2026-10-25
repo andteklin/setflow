@@ -6,44 +6,13 @@ import {
   parseChordPro,
   PerformanceSession,
   songMetadata,
-  type ChartLine,
   type CommandAck,
   type CommandEnvelope,
   type ParsedSong,
-  type PerformanceState,
-  type SongMetadata,
 } from "@setflow/core";
-import { HttpError, resolveSongMap, summarizeSections, type Library, type SectionSummary } from "./library.js";
+import { HttpError, resolveSongMap, summarizeSections, type Library } from "./library.js";
+import type { LiveStatus, RecoverySummary, SessionContent } from "./protocol.js";
 import type { PinnedContent, RecoverySnapshot, Store } from "./store.js";
-
-/** Everything a view needs to render the pinned song. Fetched once per session id. */
-export interface SessionContent {
-  sessionId: string;
-  songId: string;
-  songRevision: number;
-  title: string;
-  arrangementId: string;
-  arrangementName: string;
-  songMap: string;
-  metadata: SongMetadata;
-  sections: Array<SectionSummary & { lines: ChartLine[] }>;
-}
-
-export interface RecoverySummary {
-  title: string;
-  arrangementName: string;
-  current: string | null;
-  status: PerformanceState["status"];
-  savedAt: string;
-}
-
-/** The authoritative live status broadcast to every client. */
-export interface LiveStatus {
-  state: PerformanceState | null;
-  controllerId: string | null;
-  title: string | null;
-  recovery: RecoverySummary | null;
-}
 
 export interface StartInput {
   songId?: string;

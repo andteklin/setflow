@@ -3,50 +3,9 @@ import fs from "node:fs";
 import path from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import type { PerformanceState } from "@setflow/core";
+import type { ArrangementRecord, Provenance, SetlistItem, SetlistRecord, SongRecord } from "./protocol.js";
 
-/** Where a song came from (spec §16.1–16.2). Content stays on this host. */
-export interface Provenance {
-  providerId: "file" | "paste" | "manual";
-  fileName?: string;
-  importedAt: string;
-  storagePolicy: "organization-local";
-}
-
-export interface SongRecord {
-  id: string;
-  title: string;
-  /** The ChordPro exactly as imported or last edited. Reparsed on every read. */
-  sourceText: string;
-  revision: number;
-  provenance: Provenance;
-  createdAt: string;
-  updatedAt: string;
-}
-
-/** A saved Song Map. Stored as map text ("I → V1 → B×2") so it survives source edits that renumber sections. */
-export interface ArrangementRecord {
-  id: string;
-  songId: string;
-  name: string;
-  songMap: string;
-  performanceKey: string | null;
-  revision: number;
-  updatedAt: string;
-}
-
-export interface SetlistItem {
-  songId: string;
-  arrangementId: string;
-  performanceKey?: string;
-}
-
-export interface SetlistRecord {
-  id: string;
-  name: string;
-  items: SetlistItem[];
-  revision: number;
-  updatedAt: string;
-}
+export type { ArrangementRecord, Provenance, SetlistItem, SetlistRecord, SongRecord };
 
 /** What is pinned to a live session: the exact song text and arrangement it started from. */
 export interface PinnedContent {

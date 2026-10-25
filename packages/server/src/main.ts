@@ -7,7 +7,18 @@ const dataDir = process.env.SETFLOW_DATA ?? path.join(os.homedir(), ".setflow");
 const staticDir = process.env.SETFLOW_WEB ?? path.resolve(import.meta.dirname, "../../web/dist");
 
 const app = createApp({ dataFile: path.join(dataDir, "setflow.db"), staticDir });
-const bound = await app.listen(port);
+let bound: number;
+try {
+  bound = await app.listen(port);
+} catch (err) {
+  const code = (err as NodeJS.ErrnoException).code;
+  console.error(
+    code === "EADDRINUSE"
+      ? `Port ${port} is already in use. Is SetFlow already running? Close it, or start with SETFLOW_PORT=<other port>.`
+      : `Could not start the SetFlow host: ${(err as Error).message}`,
+  );
+  process.exit(1);
+}
 
 const urls = lanUrls(bound);
 console.log("SetFlow host is running. No Internet connection is needed.\n");

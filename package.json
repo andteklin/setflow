@@ -8,8 +8,15 @@
     "setflow-parser-test"
   ],
   "scripts": {
+    "start": "npm run build -w @setflow/web && npm start -w @setflow/server",
+    "build": "npm run build --workspaces --if-present",
+    "dev:server": "npm run dev -w @setflow/server",
+    "dev:web": "npm run dev -w @setflow/web",
     "test": "npm run test --workspaces --if-present",
     "typecheck": "npm run typecheck --workspaces --if-present",
     "ui": "npm run ui -w setflow-parser-test"
+  },
+  "engines": {
+    "node": ">=22.13"
   }
 }

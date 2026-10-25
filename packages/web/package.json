@@ -1,0 +1,20 @@
+{
+  "name": "@setflow/web",
+  "version": "0.1.0",
+  "private": true,
+  "description": "SetFlow Control, Stage and Musician views",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@setflow/core": "*"
+  },
+  "devDependencies": {
+    "@setflow/server": "*",
+    "typescript": "^7.0.2",
+    "vite": "^8.3.2"
+  }
+}

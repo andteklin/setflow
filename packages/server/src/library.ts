@@ -6,9 +6,19 @@ import {
   sourceOrderArrangement,
   type ArrangementItem,
   type ParsedSong,
-  type SongMetadata,
 } from "@setflow/core";
-import type { ArrangementRecord, Provenance, SetlistItem, SetlistRecord, SongRecord, Store } from "./store.js";
+import type {
+  ArrangementRecord,
+  ArrangementView,
+  ImportPreview,
+  SectionSummary,
+  SetlistItem,
+  SetlistRecord,
+  SongDetail,
+  SongRecord,
+  SongSummary,
+} from "./protocol.js";
+import type { Store } from "./store.js";
 
 export class HttpError extends Error {
   constructor(
@@ -20,46 +30,6 @@ export class HttpError extends Error {
 }
 
 export const SOURCE_ORDER_NAME = "Source Order";
-
-export interface SectionSummary {
-  id: string;
-  token: string;
-  sourceLabel: string;
-  displayLabel: string;
-  type: string;
-  lineCount: number;
-}
-
-export interface ImportPreview {
-  metadata: SongMetadata;
-  sections: SectionSummary[];
-  sourceOrderMap: string;
-  warnings: string[];
-}
-
-export interface ArrangementView extends ArrangementRecord {
-  /** Resolved against the current song source; null when the map no longer matches it. */
-  items: ArrangementItem[] | null;
-  error: string | null;
-}
-
-export interface SongSummary {
-  id: string;
-  title: string;
-  artist?: string;
-  originalKey?: string;
-  revision: number;
-  sectionCount: number;
-  provenance: Provenance;
-  updatedAt: string;
-}
-
-export interface SongDetail {
-  song: SongRecord;
-  metadata: SongMetadata;
-  sections: SectionSummary[];
-  arrangements: ArrangementView[];
-}
 
 export function summarizeSections(song: ParsedSong): SectionSummary[] {
   return song.sections.map((s) => ({

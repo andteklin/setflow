@@ -6,8 +6,8 @@ import { after, before, describe, it } from "node:test";
 import WebSocket from "ws";
 import type { CommandAck, CommandEnvelope, PerformanceCommand } from "@setflow/core";
 import { createApp, type ServerMessage } from "../src/app.js";
-import type { LiveStatus, SessionContent } from "../src/live.js";
-import type { ArrangementView, SongDetail } from "../src/library.js";
+import type { LiveStatus, SessionContent } from "../src/protocol.js";
+import type { ArrangementView, SongDetail } from "../src/protocol.js";
 
 const FIXTURE = fs.readFileSync(path.join(import.meta.dirname, "../../core/test/fixtures/sample-variants.cho"), "utf8");
 const MD = "md-laptop";
