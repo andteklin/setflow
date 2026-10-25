@@ -9,6 +9,7 @@ import {
   type CommandAck,
   type CommandEnvelope,
   type ParsedSong,
+  type PerformanceCommand,
 } from "@setflow/core";
 import { HttpError, resolveSongMap, summarizeSections, type Library } from "./library.js";
 import type { LiveStatus, RecoverySummary, SessionContent } from "./protocol.js";
@@ -102,6 +103,29 @@ export class LiveHost {
     const ack = session.submit(envelope);
     if (session.state !== before) this.changed();
     return ack;
+  }
+
+  /**
+   * Submit a command from an input attached to the host itself (MIDI), on
+   * behalf of the conducting controller. Returns an error message, or null.
+   */
+  conduct(command: PerformanceCommand, source: "midi" | "gpio"): string | null {
+    const session = this.session;
+    if (!session || session.state.status === "ended") return "No performance is running";
+    const ack = this.submit({
+      commandId: randomUUID(),
+      sessionId: session.sessionId,
+      expectedRevision: session.state.revision,
+      source,
+      controllerId: session.controllerId,
+      command,
+    });
+    return ack.accepted ? null : ack.message;
+  }
+
+  /** Sections of the pinned song, for resolving MIDI jump tokens. */
+  sections(): ReadonlyArray<{ id: string; token: string }> {
+    return this.session && this.parsed ? this.parsed.sections : [];
   }
 
   takeControl(controllerId: unknown): LiveStatus {

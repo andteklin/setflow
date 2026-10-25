@@ -129,9 +129,49 @@ export interface HostInfo {
   clients: ConnectedClient[];
 }
 
+/** What a mapped MIDI button does. Jumps name a section by its exact token, e.g. "C1C". */
+export type MidiAction = { type: "NEXT" | "PREVIOUS" | "REPEAT" | "VAMP" | "END" } | { type: "JUMP"; token: string };
+
+export interface MidiBinding {
+  kind: "note" | "cc";
+  number: number;
+  action: MidiAction;
+}
+
+export interface MidiSettings {
+  enabled: boolean;
+  deviceName: string | null;
+  /** 1–16, or null to accept every channel. */
+  channel: number | null;
+  bindings: MidiBinding[];
+}
+
+export interface MidiEvent {
+  kind: "note" | "cc";
+  channel: number;
+  number: number;
+  value: number;
+  press: boolean;
+  at: string;
+}
+
+export interface MidiStatus {
+  available: boolean;
+  unavailableReason: string | null;
+  devices: string[];
+  connected: boolean;
+  error: string | null;
+  settings: MidiSettings;
+  /** The last press received, for learning and testing mappings. */
+  lastEvent: MidiEvent | null;
+  /** What that press did: the action taken, or why nothing happened. */
+  lastResult: string | null;
+}
+
 /** Messages the host sends over the LAN WebSocket. */
 export type ServerMessage =
   | { type: "status"; status: LiveStatus }
+  | { type: "midi"; status: MidiStatus }
   | { type: "ack"; ack: CommandAck }
   | { type: "clients"; clients: ConnectedClient[] }
   | { type: "library" }

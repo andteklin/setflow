@@ -12,6 +12,7 @@ import { api } from "../api";
 import { h, load, mount, save } from "../dom";
 import type { LiveClient } from "../live";
 import { KEYS, livePanel, type StartTarget } from "./livePanel";
+import { midiPanel } from "./midiPanel";
 
 interface DraftItem {
   token: string;
@@ -56,7 +57,8 @@ export function controlView(root: HTMLElement, live: LiveClient): () => void {
   const sidebar = h("nav", { class: "library" });
   const center = h("section", { class: "song-panel" });
   const panel = livePanel(live, startTarget);
-  mount(root, header, h("div", { class: "control-grid" }, sidebar, center, panel.el));
+  const midi = midiPanel(live);
+  mount(root, header, h("div", { class: "control-grid" }, sidebar, center, h("aside", { class: "live-panel" }, panel.el, midi.el)));
 
   function arrangement(): ArrangementView | undefined {
     return detail?.arrangements.find((a) => a.id === arrangementId);
@@ -636,6 +638,7 @@ export function controlView(root: HTMLElement, live: LiveClient): () => void {
     unsubscribeLibrary();
     unsubscribeLive();
     panel.dispose();
+    midi.dispose();
     window.removeEventListener("beforeunload", beforeUnload);
   };
 }

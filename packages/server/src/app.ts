@@ -6,7 +6,8 @@ import { WebSocketServer, type WebSocket } from "ws";
 import type { CommandEnvelope } from "@setflow/core";
 import { HttpError, Library } from "./library.js";
 import { LiveHost } from "./live.js";
-import type { ClientMessage, ClientRole, ServerMessage } from "./protocol.js";
+import { DEFAULT_MIDI_SETTINGS, loadNativeDriver, MidiInput, type MidiDriver } from "./midi.js";
+import type { ClientMessage, ClientRole, MidiBinding, MidiSettings, ServerMessage } from "./protocol.js";
 import { Store } from "./store.js";
 
 export type * from "./protocol.js";
@@ -16,6 +17,8 @@ export interface AppOptions {
   dataFile: string;
   /** Built web app to serve. Optional so the API can run without a UI build. */
   staticDir?: string;
+  /** MIDI input. Omitted: load the native driver. An Error: MIDI reported as unavailable. */
+  midiDriver?: MidiDriver | Error;
 }
 
 type Handler = (params: string[], body: any, url: URL) => unknown;
@@ -65,6 +68,14 @@ export function createApp(options: AppOptions) {
 
   live.onChange((status) => broadcast({ type: "status", status }));
 
+  const midi = new MidiInput(
+    options.midiDriver ?? loadNativeDriver(),
+    live,
+    store.getSetting<MidiSettings>("midi") ?? DEFAULT_MIDI_SETTINGS,
+    (settings) => store.setSetting("midi", settings),
+  );
+  midi.onChange((status) => broadcast({ type: "midi", status }));
+
   const routes: Array<[string, RegExp, Handler, { libraryChange?: boolean }?]> = [
     ["GET", /^\/api\/host$/, () => ({ urls: lanUrls(port()), clients: [...sockets.values()].filter(Boolean) })],
 
@@ -96,6 +107,9 @@ export function createApp(options: AppOptions) {
     ["POST", /^\/api\/session\/cues$/, (_, b) => live.setCues(b?.controllerId, b?.cues)],
     ["POST", /^\/api\/recovery\/resume$/, (_, b) => live.resumeRecovery(b?.controllerId)],
     ["POST", /^\/api\/recovery\/discard$/, () => live.discardRecovery()],
+
+    ["GET", /^\/api\/midi$/, () => midi.status()],
+    ["PUT", /^\/api\/midi$/, (_, b) => midi.configure(validateMidiSettings(b))],
 
     ["GET", /^\/api\/settings\/([\w-]+)$/, ([key]) => store.getSetting(key) ?? null],
     ["PUT", /^\/api\/settings\/([\w-]+)$/, ([key], b) => (store.setSetting(key, b?.value ?? null), b?.value ?? null)],
@@ -173,6 +187,7 @@ export function createApp(options: AppOptions) {
     store,
     library,
     live,
+    midi,
     listen(listenPort: number, host = "0.0.0.0"): Promise<number> {
       return new Promise((resolve, reject) => {
         server.once("error", reject);
@@ -184,11 +199,37 @@ export function createApp(options: AppOptions) {
       });
     },
     async close(): Promise<void> {
+      midi.dispose();
       for (const ws of sockets.keys()) ws.terminate();
       await new Promise<void>((resolve) => wss.close(() => resolve()));
       await new Promise<void>((resolve) => server.close(() => resolve()));
       store.close();
     },
+  };
+}
+
+function validateMidiSettings(raw: unknown): MidiSettings {
+  const s = raw as Partial<MidiSettings> | undefined;
+  const bad = (why: string) => new HttpError(400, `Invalid MIDI settings: ${why}`);
+  if (!s || typeof s !== "object") throw bad("expected an object");
+  if (s.channel !== null && s.channel !== undefined && !(Number.isInteger(s.channel) && s.channel >= 1 && s.channel <= 16)) {
+    throw bad("channel must be 1–16 or null");
+  }
+  const actions = ["NEXT", "PREVIOUS", "REPEAT", "VAMP", "END", "JUMP"];
+  const bindings = (Array.isArray(s.bindings) ? s.bindings : []).map((b: MidiBinding) => {
+    if ((b?.kind !== "note" && b?.kind !== "cc") || !Number.isInteger(b.number) || b.number < 0 || b.number > 127) {
+      throw bad("each binding needs kind note/cc and a number 0–127");
+    }
+    if (!actions.includes(b.action?.type) || (b.action.type === "JUMP" && typeof b.action.token !== "string")) {
+      throw bad("unknown action");
+    }
+    return { kind: b.kind, number: b.number, action: b.action };
+  });
+  return {
+    enabled: Boolean(s.enabled),
+    deviceName: typeof s.deviceName === "string" && s.deviceName ? s.deviceName : null,
+    channel: s.channel ?? null,
+    bindings,
   };
 }
 

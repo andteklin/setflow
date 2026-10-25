@@ -22,5 +22,8 @@
   },
   "exports": {
     "./protocol": "./src/protocol.ts"
+  },
+  "optionalDependencies": {
+    "@julusian/midi": "^3.8.1"
   }
 }

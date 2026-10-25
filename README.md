@@ -44,6 +44,16 @@ restarts mid-song, Control View offers to resume where the band was.
 Most USB page-turner foot pedals send arrow or Page keys and work as-is.
 Shortcuts are ignored while typing in a field.
 
+### MIDI controller
+
+Plug the controller into the host computer (musician devices need no MIDI
+access). In Control View, open **MIDI controller**, choose the device and
+channel, tick **Use for conducting**, then press **Learn** next to an action
+and press the button you want for it. Jump buttons name an exact section
+(`C1A`, `C1C`, …). The **Test** line shows each press and what it did.
+Note-off and release messages never trigger; unplugging the controller leaves
+web and keyboard control working, and it reconnects when plugged back in.
+
 ## Packages
 
 | Package | What it is |
@@ -64,7 +74,11 @@ npm run dev:web     # Vite on :5173, proxying /api and /ws to the host
 
 ## Not in this prototype yet
 
-- MIDI controller input (spec §19.3). Keyboard and foot pedals that send keys work today.
-- Per-song custom jump mappings; jump keys follow the song's source order.
+- MIDI input is tested with a simulated device only; a real controller/host
+  combination still needs validating (spec §19.3, §30.5).
+- Per-song custom jump keys; number keys follow the song's source order
+  (MIDI jump buttons already map to exact section tokens).
+- Manual section-type correction other than by renaming the comment in the
+  ChordPro source; converting an annotation into a section the same way.
 - Explicit "apply edits to the running song" — edits apply when the song is next started.
 - `setflow.local` / QR join.

@@ -1,5 +1,5 @@
 import type { CommandAck, PerformanceCommand } from "@setflow/core";
-import type { ClientRole, ConnectedClient, LiveStatus, ServerMessage, SessionContent } from "@setflow/server/protocol";
+import type { ClientRole, ConnectedClient, LiveStatus, MidiStatus, ServerMessage, SessionContent } from "@setflow/server/protocol";
 import { api, clientId, newId } from "./api";
 
 export interface LiveSnapshot {
@@ -22,6 +22,7 @@ export class LiveClient {
   private snapshot: LiveSnapshot = { status: null, content: null, connected: false, clients: [] };
   private readonly listeners = new Set<(s: LiveSnapshot) => void>();
   private readonly libraryListeners = new Set<() => void>();
+  private readonly midiListeners = new Set<(status: MidiStatus) => void>();
   private readonly pending = new Map<string, Pending>();
   private queue: Promise<void> = Promise.resolve();
   private closed = false;
@@ -47,6 +48,11 @@ export class LiveClient {
   onLibraryChange(listener: () => void): () => void {
     this.libraryListeners.add(listener);
     return () => this.libraryListeners.delete(listener);
+  }
+
+  onMidi(listener: (status: MidiStatus) => void): () => void {
+    this.midiListeners.add(listener);
+    return () => this.midiListeners.delete(listener);
   }
 
   /** Send a command to the host. Resolves with the host's acknowledgement. */
@@ -126,6 +132,9 @@ export class LiveClient {
       }
       case "clients":
         this.update({ clients: message.clients });
+        break;
+      case "midi":
+        for (const l of this.midiListeners) l(message.status);
         break;
       case "library":
         for (const l of this.libraryListeners) l();

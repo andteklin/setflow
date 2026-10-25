@@ -919,3 +919,30 @@ body[data-view="stage"] {
 .occurrence.next {
   background: var(--next);
 }
+
+/* MIDI setup */
+
+details.midi summary {
+  cursor: pointer;
+  font-weight: 600;
+}
+
+details.midi select {
+  flex: 1;
+}
+
+.midi-map {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 0.5rem 0;
+}
+
+.midi-map td {
+  padding: 0.2rem 0.3rem;
+  border-bottom: 1px solid var(--line);
+}
+
+.midi-map td:last-child {
+  text-align: right;
+  white-space: nowrap;
+}

@@ -34,7 +34,7 @@ const SHORTCUTS: Record<string, PerformanceCommand["type"]> = {
  * actions are one press, with every exact section variant visible as a jump.
  */
 export function livePanel(live: LiveClient, getTarget: () => StartTarget | null) {
-  const el = h("aside", { class: "live-panel" });
+  const el = h("div");
   let message = "";
   let messageIsError = false;
 
