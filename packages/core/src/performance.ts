@@ -70,6 +70,23 @@ export function createPerformance(init: PerformanceInit): PerformanceState {
   });
 }
 
+/**
+ * Continue a saved snapshot (e.g. after a host restart) under a new session id,
+ * so commands addressed to the old session can never apply (spec §25).
+ */
+export function resumePerformance(previous: PerformanceState, sessionId: string): PerformanceState {
+  const freezeAll = (occurrences: readonly SectionOccurrence[]) =>
+    Object.freeze(occurrences.map((o) => Object.freeze({ ...o })));
+  return derive({
+    ...previous,
+    sessionId,
+    revision: previous.revision + 1,
+    plannedSequence: freezeAll(previous.plannedSequence),
+    sequence: freezeAll(previous.sequence),
+    cues: Object.freeze([...previous.cues]),
+  });
+}
+
 export type TransitionResult =
   | { ok: true; state: PerformanceState; changed: boolean }
   | { ok: false; error: string };

@@ -1,6 +1,7 @@
 import {
   applyCommand,
   createPerformance,
+  resumePerformance,
   setCues,
   setPerformanceKey,
   type PerformanceCommand,
@@ -59,6 +60,16 @@ export class PerformanceSession {
     this.current = createPerformance(init);
     this.controller = init.controllerId;
     this.sectionIds = new Set(init.sectionIds);
+  }
+
+  /** Continue a recovered snapshot under a new session id. The operator confirms before this is called. */
+  static resume(
+    previous: PerformanceState,
+    init: { sessionId: string; sectionIds: Iterable<string>; controllerId: string },
+  ): PerformanceSession {
+    const session = new PerformanceSession({ ...previous, ...init });
+    session.current = resumePerformance(previous, init.sessionId);
+    return session;
   }
 
   get state(): PerformanceState {

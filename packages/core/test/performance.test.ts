@@ -273,6 +273,27 @@ describe("command gateway (spec §19.3, §30.3)", () => {
     assert.equal(session.state, before);
   });
 
+  it("resumes a saved snapshot under a new session id, rejecting the old one", () => {
+    const { session, send } = startSession();
+    accepted(send({ type: "NEXT" }));
+    accepted(send({ type: "REPEAT" }));
+    const saved = JSON.parse(JSON.stringify(session.state));
+
+    const resumed = PerformanceSession.resume(saved, {
+      sessionId: "s2",
+      sectionIds: song.sections.map((s) => s.id),
+      controllerId: MD,
+    });
+    assert.equal(resumed.state.sessionId, "s2");
+    assert.equal(resumed.state.currentOccurrenceId, session.state.currentOccurrenceId);
+    assert.deepEqual(resumed.state.sequence, session.state.sequence);
+    assert.ok(Object.isFrozen(resumed.state.sequence[0]));
+
+    const base = { commandId: "x", expectedRevision: resumed.state.revision, source: "web" as const, controllerId: MD };
+    assert.equal(rejectedFor(resumed.submit({ ...base, sessionId: "s1", command: { type: "NEXT" } })), "wrong-session");
+    assert.equal(resumed.submit({ ...base, commandId: "y", sessionId: "s2", command: { type: "NEXT" } }).accepted, true);
+  });
+
   it("revisions key and cue changes through the same authority", () => {
     const { session } = startSession();
     session.setPerformanceKey("D");

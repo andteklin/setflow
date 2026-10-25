@@ -10,6 +10,7 @@ export { semitoneDistance, transposeChartLine, transposeChord } from "./transpos
 export {
   applyCommand,
   createPerformance,
+  resumePerformance,
   setCues,
   setPerformanceKey,
   type LiveDeviation,
