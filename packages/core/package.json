@@ -1,0 +1,22 @@
+{
+  "name": "@setflow/core",
+  "version": "0.1.0",
+  "private": true,
+  "description": "SetFlow ChordPro parsing, section detection, song maps, arrangement and transposition",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "test": "node --import tsx --test test/*.test.ts",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "chordsheetjs": "^17.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^26.6.2",
+    "tsx": "^4.23.13",
+    "typescript": "^7.0.2"
+  }
+}

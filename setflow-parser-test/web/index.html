@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>SetFlow Arranger</title>
+    <link rel="stylesheet" href="./style.css" />
+  </head>
+  <body>
+    <header>
+      <h1>SetFlow Arranger</h1>
+      <p>Paste a chart from WorshipTools, build the song map, copy the result back.</p>
+    </header>
+
+    <main>
+      <section class="panel">
+        <div class="panel-head">
+          <h2>1. Original chart</h2>
+          <button id="paste" type="button">Paste</button>
+        </div>
+        <p class="hint">In WorshipTools, press Reset first so this is the original chart.</p>
+        <textarea id="source" spellcheck="false" placeholder="{title: ...}&#10;{key: ...}&#10;&#10;{comment: Verse 1}&#10;..."></textarea>
+      </section>
+
+      <section class="panel">
+        <div class="panel-head">
+          <h2>2. Song map</h2>
+        </div>
+        <p id="song-info" class="hint">No chart yet.</p>
+        <div id="sections" class="chips"></div>
+        <label for="map">Map (click sections above, or type: <code>V1, C, B*2, E</code>)</label>
+        <input id="map" type="text" spellcheck="false" autocomplete="off" />
+        <div class="row">
+          <button id="undo" type="button">Remove last</button>
+          <button id="source-order" type="button">Source order</button>
+          <button id="clear" type="button">Clear</button>
+        </div>
+        <p id="error" class="error" role="alert" hidden></p>
+        <ol id="sequence" class="sequence"></ol>
+      </section>
+
+      <section class="panel">
+        <div class="panel-head">
+          <h2>3. Arranged chart</h2>
+          <button id="copy" type="button" class="primary" disabled>Copy</button>
+        </div>
+        <p id="copy-status" class="hint">Paste this into the WorshipTools ChordPro editor.</p>
+        <textarea id="output" spellcheck="false" readonly></textarea>
+      </section>
+    </main>
+
+    <script type="module" src="./main.ts"></script>
+  </body>
+</html>

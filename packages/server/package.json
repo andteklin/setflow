@@ -1,0 +1,29 @@
+{
+  "name": "@setflow/server",
+  "version": "0.1.0",
+  "private": true,
+  "description": "SetFlow local host: song library, live performance sessions and LAN sync",
+  "type": "module",
+  "scripts": {
+    "start": "node --import tsx src/main.ts",
+    "dev": "tsx watch src/main.ts",
+    "test": "node --import tsx --test test/*.test.ts",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@setflow/core": "*",
+    "tsx": "^4.23.13",
+    "ws": "^8.18.0"
+  },
+  "devDependencies": {
+    "@types/node": "^26.6.2",
+    "@types/ws": "^8.5.13",
+    "typescript": "^7.0.2"
+  },
+  "exports": {
+    "./protocol": "./src/protocol.ts"
+  },
+  "optionalDependencies": {
+    "@julusian/midi": "^3.8.1"
+  }
+}
