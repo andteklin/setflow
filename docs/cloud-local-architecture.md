@@ -342,6 +342,7 @@ The steps below already exist on the `backend` branch:
    The `storagePolicy` field already exists, so this decision doesn't block M1–M4.
 2. **Cloud database (decide at M5).**
    - Supabase/Postgres is the spec's candidate and comes with auth.
+   - Firebase (Auth + Firestore) is a candidate: managed auth and client SDKs, but a document model, so versioned sync and conflict handling stay our responsibility.
    - The same SQLite store on one small server would keep a single database code path for the first cloud release.
 
    Either works if the library talks to a repository interface (M3).
