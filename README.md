@@ -3,7 +3,9 @@
 Local-first live worship arrangement system. One planned arrangement generates
 musician charts, and the music director (MD) conducts the band live — repeat,
 jump, vamp, end — with every display following over the local network. No
-Internet, click, or track is needed. See [PROJECT_SPEC.md](PROJECT_SPEC.md).
+Internet, click, or track is needed. See [PROJECT_SPEC.md](PROJECT_SPEC.md), and
+[docs/cloud-local-architecture.md](docs/cloud-local-architecture.md) for the
+proposed cloud + local architecture and migration plan.
 
 ## Run it
 
