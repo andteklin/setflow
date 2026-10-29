@@ -1125,7 +1125,7 @@ Restarting SetFlow must not require Internet connectivity. Recovery presents the
 
 ### 25.1 Cloud Preparation and Local Performance — Future Architecture
 
-The long-term model provides a canonical organization preparation library in a managed cloud backend, with a versioned replica on a laptop or Pi. Supabase/Postgres is a candidate, not an MVP dependency. Store users, organizations, memberships/permissions, songs, song versions, sections, arrangements/items, setlists/items, and sync records; use object storage only for necessary permitted attachments.
+The long-term model provides a canonical organization preparation library in a managed cloud backend, with a versioned replica on a laptop or Pi. Supabase/Postgres and Firebase (Auth + Firestore) are candidates, not MVP dependencies; the choice is deferred until cloud work begins, and the library should sit behind a repository interface so either can be used. Firebase's appeal is managed auth and simple client SDKs; its tradeoffs are a document model for what is naturally relational data, and the explicit versioned sync and conflict-resolution rules below, which must be implemented on top of either backend. Store users, organizations, memberships/permissions, songs, song versions, sections, arrangements/items, setlists/items, and sync records; use object storage only for necessary permitted attachments.
 
 | Data | Authority when cloud features are enabled |
 |---|---|
@@ -1227,6 +1227,7 @@ Possible future work, independent of the MVP:
 - Optional cloud accounts, configuration, and synchronization outside the live command loop, with licensed content kept local unless provider terms permit storage.
 - CCLI reporting where supported by applicable permissions and technical access.
 - Explicit section linking with a differences preview; shared and personal musician notes.
+- Replace native HTML5 drag events in the Song Map Editor and setlist ordering with a pointer-event-based library that supports touch and keyboard reordering. The current implementation works poorly on tablets and phones, so this is a planned usability fix rather than an optional nicety. dnd-kit is the preferred candidate. The React-based `@dnd-kit/react` fits if the frontend moves to React; otherwise the framework-agnostic `@dnd-kit/dom` should be evaluated first, so the drag-and-drop fix need not wait on a React migration. Reordering must keep a non-drag alternative (such as move up/down controls) for accessibility and precision.
 
 Future adapters consume accepted state changes or submit authorized commands through the same gateway. They must avoid feedback loops and fail independently; the local Performance Engine remains authoritative. Core operation does not depend on any integration.
 
