@@ -4,6 +4,7 @@ import os from "node:os";
 import path from "node:path";
 import { WebSocketServer, type WebSocket } from "ws";
 import type { CommandEnvelope } from "@setflow/core";
+import { InputDevices, isPairedInputCommand } from "./inputs.js";
 import { HttpError, Library } from "./library.js";
 import { LiveHost } from "./live.js";
 import { DEFAULT_MIDI_SETTINGS, loadNativeDriver, MidiInput, type MidiDriver } from "./midi.js";
@@ -76,6 +77,20 @@ export function createApp(options: AppOptions) {
   );
   midi.onChange((status) => broadcast({ type: "midi", status }));
 
+  const inputs = new InputDevices(store);
+  inputs.onChange((status) => broadcast({ type: "inputs", inputs: status }));
+  /**
+   * Only the MD manages paired inputs: the conductor while a song is loaded,
+   * otherwise any connected Control View (there is no conductor to defer to).
+   */
+  const requireMd = (controllerId: unknown) => {
+    const conductor = live.status().controllerId;
+    const isControl = [...sockets.values()].some((c) => c !== null && c.clientId === controllerId && c.role === "control");
+    if (conductor ? controllerId !== conductor : !isControl) {
+      throw new HttpError(403, "Only the MD's Control View can manage input devices");
+    }
+  };
+
   const routes: Array<[string, RegExp, Handler, { libraryChange?: boolean }?]> = [
     ["GET", /^\/api\/host$/, () => ({ urls: lanUrls(port()), clients: [...sockets.values()].filter(Boolean) })],
 
@@ -88,6 +103,8 @@ export function createApp(options: AppOptions) {
 
     ["POST", /^\/api\/songs\/([^/]+)\/arrangements$/, ([id], b) => library.createArrangement(id, b ?? {}), { libraryChange: true }],
     ["PUT", /^\/api\/arrangements\/([^/]+)$/, ([id], b) => library.updateArrangement(id, b ?? {}), { libraryChange: true }],
+    ["GET", /^\/api\/arrangements\/([^/]+)\/chordpro$/, ([id]) => library.arrangedChordPro(id)],
+    ["PUT", /^\/api\/arrangements\/([^/]+)\/chordpro$/, ([id], b) => library.saveArrangedChordPro(id, b?.text, b?.expectedRevision), { libraryChange: true }],
     ["POST", /^\/api\/arrangements\/([^/]+)\/duplicate$/, ([id], b) => library.duplicateArrangement(id, b?.name), { libraryChange: true }],
     ["POST", /^\/api\/arrangements\/([^/]+)\/restore-source-order$/, ([id]) => library.restoreSourceOrder(id), { libraryChange: true }],
     ["DELETE", /^\/api\/arrangements\/([^/]+)$/, ([id]) => library.deleteArrangement(id), { libraryChange: true }],
@@ -101,12 +118,20 @@ export function createApp(options: AppOptions) {
     ["GET", /^\/api\/session$/, () => live.status()],
     ["GET", /^\/api\/session\/content$/, () => live.content()],
     ["POST", /^\/api\/session\/start$/, (_, b) => live.start(b ?? {})],
+    ["POST", /^\/api\/service\/start$/, (_, b) => live.startSetlist(b ?? {})],
+    ["POST", /^\/api\/service\/song$/, (_, b) => live.goToSong(b?.controllerId, b?.index)],
     ["POST", /^\/api\/session\/commands$/, (_, b) => live.submit(validateEnvelope(b))],
     ["POST", /^\/api\/session\/control$/, (_, b) => live.takeControl(b?.controllerId)],
     ["POST", /^\/api\/session\/key$/, (_, b) => live.setPerformanceKey(b?.controllerId, b?.performanceKey)],
     ["POST", /^\/api\/session\/cues$/, (_, b) => live.setCues(b?.controllerId, b?.cues)],
     ["POST", /^\/api\/recovery\/resume$/, (_, b) => live.resumeRecovery(b?.controllerId)],
     ["POST", /^\/api\/recovery\/discard$/, () => live.discardRecovery()],
+
+    ["GET", /^\/api\/inputs$/, () => inputs.status()],
+    ["POST", /^\/api\/inputs\/request$/, (_, b) => inputs.request(b?.clientId, b?.label)],
+    ["POST", /^\/api\/inputs\/approve$/, (_, b) => (requireMd(b?.controllerId), inputs.approve(b?.clientId))],
+    ["POST", /^\/api\/inputs\/deny$/, (_, b) => (requireMd(b?.controllerId), inputs.deny(b?.clientId))],
+    ["POST", /^\/api\/inputs\/revoke$/, (_, b) => (requireMd(b?.controllerId), inputs.revoke(b?.clientId))],
 
     ["GET", /^\/api\/midi$/, () => midi.status()],
     ["PUT", /^\/api\/midi$/, (_, b) => midi.configure(validateMidiSettings(b))],
@@ -153,6 +178,7 @@ export function createApp(options: AppOptions) {
 
     // A joining client gets the current snapshot straight away (spec §23).
     send(ws, { type: "status", status: live.status() });
+    send(ws, { type: "inputs", inputs: inputs.status() });
 
     ws.on("message", (data) => {
       let message: ClientMessage;
@@ -167,6 +193,15 @@ export function createApp(options: AppOptions) {
           broadcastClients();
         } else if (message.type === "command") {
           send(ws, { type: "ack", ack: live.submit(validateEnvelope(message.envelope)) });
+        } else if (message.type === "input") {
+          // Identity is the one this socket said hello with, not anything in the message.
+          const clientId = sockets.get(ws)?.clientId;
+          const type = message.command?.type;
+          let error: string | null;
+          if (!inputs.isApproved(clientId)) error = "This device is not an approved input; ask the MD to allow it";
+          else if (!isPairedInputCommand(type)) error = "A paired input can only send NEXT or PREVIOUS";
+          else error = live.conduct({ type }, "keyboard");
+          send(ws, { type: "inputResult", accepted: error === null, message: error });
         }
       } catch (err) {
         send(ws, { type: "error", message: (err as Error).message });
@@ -188,6 +223,7 @@ export function createApp(options: AppOptions) {
     library,
     live,
     midi,
+    inputs,
     listen(listenPort: number, host = "0.0.0.0"): Promise<number> {
       return new Promise((resolve, reject) => {
         server.once("error", reject);

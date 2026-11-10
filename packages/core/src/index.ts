@@ -6,6 +6,15 @@ export { chartLines, parseChartLine, songMetadata } from "./chart.js";
 export { formatSongMap, parseSongMap } from "./songmap.js";
 export { applyArrangement, sourceOrderArrangement } from "./arrange.js";
 export { occurrenceLabel, serializeChordPro, type SerializeOptions } from "./serialize.js";
+export {
+  ArrangedEditError,
+  arrangedChordPro,
+  fitNotes,
+  isNoteLine,
+  notesByOccurrence,
+  parseArrangedNotes,
+  type ArrangedOptions,
+} from "./arranged.js";
 export { semitoneDistance, transposeChartLine, transposeChord } from "./transpose.js";
 export {
   applyCommand,

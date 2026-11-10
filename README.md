@@ -44,7 +44,37 @@ restarts mid-song, Control View offers to resume where the band was.
 | End | END the performance |
 
 Most USB page-turner foot pedals send arrow or Page keys and work as-is.
+Fast presses are applied in order; holding a key down does not repeat it.
 Shortcuts are ignored while typing in a field.
+
+### Running a setlist
+
+Choose a setlist in Control View and press **Start setlist**. Every song is
+checked and frozen at that moment, so a broken map is reported before the
+service, and library edits made during it wait for the next one. NEXT on the
+last section ends the song as usual; **one more NEXT loads the next song** at
+Ready (Stage shows "NEXT SONG: …"). PREVIOUS before a song starts goes back
+one. The live panel lists every song for jumping directly. Clicking a setlist
+entry in the sidebar lets you change its arrangement or key in place.
+
+### Presentation clicker on the Stage computer
+
+A clicker plugged into the MD's computer already works (it sends arrow or
+Page keys), including into a Stage window on a second monitor. For a clicker
+on a separate Stage computer: open Stage there, move the mouse, choose **Use
+a clicker here**, then press **Allow** under *Clicker devices* in Control
+View. That device can then send NEXT and PREVIOUS only; the MD stays the one
+conductor and can remove it at any time.
+
+### Comments in charts
+
+- `{comment: Build here}` or `{ci: …}` inside a section is shown to the band.
+- A line starting with `#` is hidden from Stage and Musician views; Control
+  View shows it dimmed. Remove the `#` to show it again.
+- The **Arranged ChordPro** tab shows the arrangement as one chart in
+  performance order, ready to copy or download. Comments added there belong to
+  that arrangement only (the song and its other arrangements are unchanged)
+  and move with their section when the Song Map is reordered.
 
 ### MIDI controller
 
@@ -83,4 +113,6 @@ npm run dev:web     # Vite on :5173, proxying /api and /ws to the host
 - Manual section-type correction other than by renaming the comment in the
   ChordPro source; converting an annotation into a section the same way.
 - Explicit "apply edits to the running song" — edits apply when the song is next started.
+- A separate "Prepare for service" step with a stored service package for
+  cloud sync (docs M1/M6); a setlist is frozen when it starts instead.
 - `setflow.local` / QR join.

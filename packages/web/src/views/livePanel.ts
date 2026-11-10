@@ -1,7 +1,7 @@
 import type { PerformanceCommand } from "@setflow/core";
 import type { LiveStatus } from "@setflow/server/protocol";
 import { api, clientId } from "../api";
-import { liveView, occurrenceText, renderLines } from "../chart";
+import { liveView, occurrenceLines, occurrenceText, renderLines, serviceView } from "../chart";
 import { h, isTyping, mount } from "../dom";
 import type { LiveClient, LiveSnapshot } from "../live";
 
@@ -15,6 +15,13 @@ export interface StartTarget {
   arrangementName: string;
   performanceKey: string;
   ready: boolean;
+}
+
+/** The setlist chosen in the library, which can be started as a whole service (issue #7). */
+export interface SetlistTarget {
+  setlistId: string;
+  name: string;
+  count: number;
 }
 
 /** Keyboard equivalents (spec §19.3). Common USB foot pedals send arrows or Page Up/Down. */
@@ -33,7 +40,7 @@ const SHORTCUTS: Record<string, PerformanceCommand["type"]> = {
  * The live conducting panel of Control View (spec §20, §2.7): routine
  * actions are one press, with every exact section variant visible as a jump.
  */
-export function livePanel(live: LiveClient, getTarget: () => StartTarget | null) {
+export function livePanel(live: LiveClient, getTarget: () => StartTarget | null, getSetlist: () => SetlistTarget | null = () => null) {
   const el = h("div");
   let message = "";
   let messageIsError = false;
@@ -66,10 +73,19 @@ export function livePanel(live: LiveClient, getTarget: () => StartTarget | null)
   const jumpTargets = (snap: LiveSnapshot) => snap.content?.sections ?? [];
 
   const onKey = (e: KeyboardEvent) => {
-    if (isTyping(e.target) || e.ctrlKey || e.metaKey || e.altKey || !live.isConductor) return;
+    // A held key auto-repeats; only a fresh press is a deliberate command (spec §2.7).
+    if (e.repeat || isTyping(e.target) || e.ctrlKey || e.metaKey || e.altKey || !live.isConductor) return;
     const state = live.current.status?.state;
-    if (!state || state.status === "ended") return;
     const type = SHORTCUTS[e.key] ?? SHORTCUTS[e.key.toLowerCase()];
+    if (!state) return;
+    // After a song ends, only NEXT does anything: it loads the next setlist song (issue #7).
+    if (state.status === "ended") {
+      if (type === "NEXT" && serviceView(live.current.status).nextSong) {
+        e.preventDefault();
+        void send({ type: "NEXT" });
+      }
+      return;
+    }
     if (type) {
       e.preventDefault();
       if (type === "END" && !confirm("End the performance?")) return;
@@ -92,6 +108,9 @@ export function livePanel(live: LiveClient, getTarget: () => StartTarget | null)
     const view = liveView(state, snap.content);
     const conducting = status?.controllerId === clientId;
     const target = getTarget();
+    const setlistTarget = getSetlist();
+    const service = status?.service ?? null;
+    const where = serviceView(status);
     const running = state && state.status !== "ended";
 
     const startBox = h(
@@ -119,14 +138,67 @@ export function livePanel(live: LiveClient, getTarget: () => StartTarget | null)
         },
         running ? "Start selected song" : "Start",
       ),
+      setlistTarget
+        ? h(
+            "div",
+            { class: "start-setlist" },
+            h(
+              "button",
+              {
+                class: running || service ? "" : "primary",
+                disabled: setlistTarget.count === 0 || !snap.connected,
+                title: "Pins every song in the setlist now, then NEXT after each song ends loads the next one",
+                onclick: () => {
+                  if (running && !confirm(`Stop "${status?.title}" and start setlist "${setlistTarget.name}"?`)) return;
+                  void post("/api/service/start", { setlistId: setlistTarget.setlistId, controllerId: clientId });
+                },
+              },
+              `Start setlist “${setlistTarget.name}” (${setlistTarget.count})`,
+            ),
+          )
+        : null,
     );
+
+    const goToSong = (index: number) => {
+      if (state?.status === "active" && !confirm(`Leave "${status?.title}" mid-song?`)) return;
+      void post("/api/service/song", { controllerId: clientId, index });
+    };
+    const serviceCard = service
+      ? h(
+          "div",
+          { class: "card service" },
+          h("h3", null, service.name, h("span", { class: "muted small" }, ` · ${where.position}`)),
+          h(
+            "ol",
+            { class: "service-songs" },
+            service.items.map((item, i) =>
+              h(
+                "li",
+                { class: i === service.index ? "current" : "" },
+                h(
+                  "button",
+                  { class: "link", disabled: !conducting || i === service.index, onclick: () => goToSong(i) },
+                  h("span", null, item.title),
+                  h("span", { class: "muted small" }, [item.arrangementName, item.performanceKey && `Key ${item.performanceKey}`].filter(Boolean).join(" · ")),
+                ),
+              ),
+            ),
+          ),
+          h(
+            "div",
+            { class: "row" },
+            h("button", { disabled: !conducting || service.index === 0, onclick: () => goToSong(service.index - 1) }, "◀ Previous song"),
+            h("button", { disabled: !conducting || !where.nextSong, onclick: () => goToSong(service.index + 1) }, "Next song ▶"),
+          ),
+        )
+      : null;
 
     const recovery = status?.recovery
       ? h(
           "div",
           { class: "card warn" },
           h("h3", null, "Unfinished performance found"),
-          h("p", null, h("strong", null, status.recovery.title), " — ", status.recovery.arrangementName, h("br"), "Last at: ", status.recovery.current ?? "not started", h("br"), h("span", { class: "muted" }, new Date(status.recovery.savedAt).toLocaleString())),
+          h("p", null, h("strong", null, status.recovery.title), " — ", status.recovery.arrangementName, status.recovery.setlist ? [h("br"), status.recovery.setlist] : null, h("br"), "Last at: ", status.recovery.current ?? "not started", h("br"), h("span", { class: "muted" }, new Date(status.recovery.savedAt).toLocaleString())),
           h("p", { class: "muted" }, "Resuming shows that position again; it does not advance the band."),
           h(
             "div",
@@ -200,7 +272,7 @@ export function livePanel(live: LiveClient, getTarget: () => StartTarget | null)
             ),
             cueEditor(state.cues, conducting, (cues) => void post("/api/session/cues", { controllerId: clientId, cues })),
             view.current
-              ? h("details", { class: "preview", open: true }, h("summary", null, "Current chart"), renderLines(view.current.section.lines, view.semitones))
+              ? h("details", { class: "preview", open: true }, h("summary", null, "Current chart"), renderLines(occurrenceLines(snap.content, view.current.occ, view.current.section), view.semitones, { showHidden: true }))
               : null,
             state.liveDeviations.length
               ? h(
@@ -212,7 +284,22 @@ export function livePanel(live: LiveClient, getTarget: () => StartTarget | null)
               : null,
           ]
         : state?.status === "ended"
-          ? h("div", { class: "now" }, h("div", { class: "now-section" }, "ENDED"), h("p", { class: "muted" }, status?.title ?? ""))
+          ? h(
+              "div",
+              { class: "now" },
+              h("div", { class: "now-section" }, "ENDED"),
+              h("p", { class: "muted" }, status?.title ?? ""),
+              where.nextSong
+                ? [
+                    h("div", { class: "now-next" }, "Next song: ", h("strong", null, where.nextSong)),
+                    h(
+                      "div",
+                      { class: "transport" },
+                      h("button", { class: "primary next", disabled: !conducting, onclick: () => void send({ type: "NEXT" }), title: "→, Space or Page Down" }, "NEXT SONG ▶"),
+                    ),
+                  ]
+                : null,
+            )
           : null;
 
     mount(
@@ -222,6 +309,7 @@ export function livePanel(live: LiveClient, getTarget: () => StartTarget | null)
       message ? h("div", { class: messageIsError ? "banner error" : "banner" }, message) : null,
       recovery,
       transport,
+      serviceCard,
       startBox,
       h("p", { class: "muted small" }, "Keys: → / Space next · ← previous · R repeat · V vamp · 1–0 jump · End to end"),
     );

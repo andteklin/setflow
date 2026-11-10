@@ -317,3 +317,42 @@ describe("arranged output with normalized sections", () => {
     assert.throws(() => parseSongMap("V1,C", song), /Did you mean: C1A, C1B\?/);
   });
 });
+
+// GitHub issue #1: a Post-Chorus right after a Chorus was folded into the Chorus.
+describe("sections after a chorus (issue #1)", () => {
+  const song = parseChordPro(`{title: Example}
+
+{comment: Chorus}
+[C]Shine on
+
+{comment: Post-Chorus}
+[F]Oh oh oh
+
+{comment: Post Chorus 2}
+[G]Whoa
+
+{comment: Breakdown}
+[Am]Down low
+
+{comment: Big Finish}
+[C]Last line
+`);
+
+  it("gives each one its own section and token", () => {
+    assert.deepEqual(
+      song.sections.map((s) => [s.token, s.type, s.sourceLabel]),
+      [
+        ["C", "chorus", "Chorus"],
+        ["POC", "postchorus", "Post-Chorus"],
+        ["POC2", "postchorus", "Post Chorus 2"],
+        ["BD", "breakdown", "Breakdown"],
+        ["BF", "custom", "Big Finish"],
+      ],
+    );
+    assert.deepEqual(song.sections[0].rawLines, ["[C]Shine on"]);
+  });
+
+  it("can use them in a song map", () => {
+    assert.equal(formatSongMap(song, parseSongMap("C, POC, C, POC2, BF", song)), "C → POC → C → POC2 → BF");
+  });
+});

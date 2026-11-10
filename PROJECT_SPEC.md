@@ -115,6 +115,14 @@ Multiple arrangements may reference the same song.
 
 Rehearsal arrangement edits change Song Map references and repetition counts, never duplicated chart text. Editing chords or shared section annotations changes the section definition, so all occurrences referencing that version update together. Distinct sections such as C1A/C1B remain independent. Active performances retain pinned versions until an explicit apply/restart; personal notes remain future scope.
 
+**Arrangement comments.** An arrangement may also carry its own comment lines, which are not part of the song. An example is `{ci: Drums out}` in the second pass of the Bridge in the Sunday arrangement only. They are edited in the arranged ChordPro view (the chronological chart that §2.2's serializer produces):
+
+- **Source comments carry through.** Comments already in the source, including `#` hidden lines (§6), appear in every arrangement automatically.
+- **Only comment lines are editable.** Comment lines (`{comment}`, `{ci}`, `{cb}`, `#`) can be added or removed there. Edits to chords, lyrics, section headings or other song lines are refused with the line number. Those belong to the shared source.
+- **Anchored, not copied.** Each comment is stored on the arrangement and anchored to an item, the pass within that item, and a line offset in the section. No chart text is copied.
+- **Comments survive edits.** A comment moves with its item when the Song Map is reordered. A source edit that shortens the section moves the comment to the section's end. A map change that removes its item or pass drops it.
+- **Live views.** Comments render on the planned occurrence they belong to. Occurrences inserted live (REPEAT, JUMP) show only the section's own content.
+
 ### 2.4 One Application, Multiple Views
 
 SetFlow is one application with a shared data model and at least three interfaces:
@@ -367,6 +375,10 @@ Suggested detection strategy:
 5. Allow the user to manually convert an annotation into a section.
 
 The importer should prioritize **not losing information** over aggressive normalization.
+
+### 6.1 Hidden `#` Comment Lines
+
+Following the ChordPro standard, a line whose first non-blank character is `#` is a comment for the chart's author, not its reader. SetFlow keeps such lines verbatim in the source and in exported or arranged ChordPro. It never shows them on Stage or Musician views. Control View's chart preview shows them dimmed, so the MD can see what is hidden. This lets the MD switch a direction off and back on by adding or removing the `#`. A commented-out section marker such as `# {comment: Bridge}` starts no section. A `#` inside a line, such as the chord `[C#m]`, is not a comment. Other prefixes such as `//` are not comments, because lyrics can legitimately begin with them.
 
 ---
 
@@ -946,7 +958,14 @@ The MD issues transitions at the intended musical boundary. MVP commands act imm
 | `VAMP` | Hold the current section indefinitely until `NEXT`, `JUMP`, `PREVIOUS`, or `END`. Repeated `VAMP` is idempotent; `REPEAT` explicitly counts another iteration. Show `VAMP — UNTIL CUE`, with the exit successor separately labeled. |
 | `END` | Mark ended, clear current/next and vamp state, and show `ENDED` on all views. It does not jump to a section named Ending; use `JUMP` for that. |
 
-`REPEAT`, `VAMP`, and `PREVIOUS` require an active current occurrence. A valid `JUMP` from ready starts performance at its target. After ending, transport commands do not restart the song; the operator explicitly starts a new session. Invalid targets are rejected without changing state. `NEXT` while vamping always exits, even if prior repeat commands extended the repetition group.
+`REPEAT`, `VAMP`, and `PREVIOUS` require an active current occurrence. A valid `JUMP` from ready starts performance at its target. After ending, transport commands do not restart the song; the operator explicitly starts a new session.
+
+**Setlist performance.** A setlist can be performed as one service. Starting it validates every entry and pins each song's source, map and key at that moment. A broken entry prevents the start and is named, so the problem surfaces before the service. Library edits during the service never change what is played. Two transitions then move between songs, and each starts a new session for the new song:
+
+- `NEXT` after a song has ended loads the next entry at ready. The final section still ends the song first, so moving to the next song always takes a deliberate extra press. A stray press in the outro cannot jump the band's charts.
+- `PREVIOUS` at ready loads the previous entry at ready.
+
+Both pass through the same gateway checks as any command: session, controller, expected revision, and deduplication by `commandId`. Every input adapter therefore gets them. Control View may also load any entry directly. Recovery remembers the setlist and entry, including between songs. A song started on its own, outside a setlist, behaves as before. Invalid targets are rejected without changing state. `NEXT` while vamping always exits, even if prior repeat commands extended the repetition group.
 
 Live commands change only the session sequence and deviation history. Editing a saved song/map during performance stages changes for the next session; explicit application to the active session must validate occurrence references and broadcast one coherent revision. MVP may require ending and restarting before applying structural edits. Performance key and cues are host-controlled state changes and use the same validation/revision authority.
 
@@ -957,6 +976,10 @@ Web buttons, keyboard shortcuts, and MIDI controller input are MVP input adapter
 The gateway validates the authorized local controller, session, expected revision, and target. It serializes accepted commands, deduplicates retries by `commandId`, and returns an acknowledgement with the authoritative revision. Stale commands are rejected with a fresh snapshot rather than blindly replayed. The active MD controller sends commands in order. View-only musician clients cannot conduct the band.
 
 MVP MIDI is deliberately small: one selected controller connected to the host, configurable note-on or control-change button mappings, channel selection, a mapping test, and saved local mappings. Map named jump buttons to section IDs, including exact chorus variants. Ignore note-off/zero-velocity release events, trigger control-change buttons only on the configured press edge, and suppress duplicate transport retries without suppressing deliberate repeated presses. Keyboard shortcuts are disabled while typing into editors.
+
+A web client sends one command at a time and stamps each with the revision from the previous acknowledgement. Rapid presses from a clicker or foot pedal are therefore applied in order rather than rejected as stale. A key held down auto-repeats; those repeats are ignored. Nothing is held across a disconnect.
+
+**Paired inputs.** A presentation clicker may be plugged into a computer other than the MD's, typically the Stage display computer. That device asks to pair from Stage View, and the MD explicitly approves it in Control View. Approvals persist on the host and can be revoked. An approved device can send only `NEXT` and `PREVIOUS`. The host submits them on behalf of the conducting controller with the current revision, exactly like host-attached MIDI. There is still one conductor, and the paired device never becomes one. Stage View in the conductor's own browser, such as a second monitor on the MD's computer, accepts the same clicker keys directly.
 
 Use a host-side MIDI adapter in the supported desktop host environment, so musician browsers do not need MIDI access or browser MIDI permissions. Validate one documented controller/host combination for MVP. Device hot-unplug reports status and leaves Web/keyboard control working. MIDI clock, MIDI output, track control, and external application cue mapping are future features.
 
@@ -1042,6 +1065,8 @@ Example:
 ```
 
 Stage View prioritizes readability rather than reproducing the exact source-file layout.
+
+Below the next section's label, Stage View previews its first two lines (chords and lyrics) at a fixed smaller size. The band can then see what is coming without the preview competing with the current chart. During a setlist, Stage View shows the song's position ("SONG 2 OF 5"). It shows the next song's title at the last section and after a song ends.
 
 ---
 
@@ -1227,7 +1252,7 @@ Possible future work, independent of the MVP:
 - Optional cloud accounts, configuration, and synchronization outside the live command loop, with licensed content kept local unless provider terms permit storage.
 - CCLI reporting where supported by applicable permissions and technical access.
 - Explicit section linking with a differences preview; shared and personal musician notes.
-- Replace native HTML5 drag events in the Song Map Editor and setlist ordering with a pointer-event-based library that supports touch and keyboard reordering. The current implementation works poorly on tablets and phones, so this is a planned usability fix rather than an optional nicety. dnd-kit is the preferred candidate. The React-based `@dnd-kit/react` fits if the frontend moves to React; otherwise the framework-agnostic `@dnd-kit/dom` should be evaluated first, so the drag-and-drop fix need not wait on a React migration. Reordering must keep a non-drag alternative (such as move up/down controls) for accessibility and precision.
+- ~~Replace native HTML5 drag events in the Song Map Editor and setlist ordering with pointer events that work on touch.~~ Done with a small dependency-free pointer-events helper (`packages/web/src/drag.ts`). `@dnd-kit/dom` was evaluated first, but it was still pre-1.0 (0.5.x) with frequent beta releases, which is too unstable for the editor. Rows move by mouse anywhere, or by touch and pen on the grip, so swipes still scroll. Palette sections can be dragged to an exact insertion point. Move up/down buttons remain the non-drag path. Revisit dnd-kit if the frontend moves to React (`@dnd-kit/react`) or `@dnd-kit/dom` reaches 1.0, especially for keyboard-driven drag.
 
 Future adapters consume accepted state changes or submit authorized commands through the same gateway. They must avoid feedback loops and fail independently; the local Performance Engine remains authoritative. Core operation does not depend on any integration.
 

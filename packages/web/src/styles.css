@@ -349,6 +349,15 @@ textarea {
   margin: 0.2em 0;
 }
 
+/* `#` comment lines: visible to the MD only, dimmed and in the source's own spelling. */
+.chart-hidden {
+  font-family: ui-monospace, monospace;
+  font-size: 0.85em;
+  color: var(--muted);
+  opacity: 0.7;
+  margin: 0.2em 0;
+}
+
 /* Home */
 
 .home {
@@ -491,6 +500,23 @@ textarea {
   background: var(--next);
 }
 
+/* The selected entry wraps so its arrangement/key pickers sit on their own line. */
+.setlist li:has(.setlist-item-editor) {
+  flex-wrap: wrap;
+}
+
+.setlist-item-editor {
+  flex-basis: 100%;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem 0.8rem;
+  font-size: 0.85em;
+}
+
+.setlist-item-editor select {
+  max-width: 12rem;
+}
+
 .song-head {
   display: flex;
   justify-content: space-between;
@@ -569,6 +595,50 @@ textarea {
 .map-row .grip {
   cursor: grab;
   color: var(--muted);
+}
+
+/* Pointer drag and drop (drag.ts). Grips and chips claim touches; the rest of a row still scrolls. */
+.grip,
+.section-chip {
+  touch-action: none;
+}
+
+.setlist .grip {
+  cursor: grab;
+  color: var(--muted);
+  padding: 0.2rem 0.1rem;
+}
+
+.map-rows {
+  min-height: 2.5rem;
+}
+
+.drag-ghost {
+  position: fixed;
+  left: 0;
+  top: 0;
+  z-index: 1000;
+  pointer-events: none;
+  opacity: 0.9;
+  box-shadow: 0 8px 24px rgb(0 0 0 / 0.25);
+  cursor: grabbing;
+}
+
+.dragging {
+  opacity: 0.35;
+}
+
+.drop-before {
+  box-shadow: inset 0 3px 0 var(--accent);
+}
+
+.drop-after {
+  box-shadow: inset 0 -3px 0 var(--accent);
+}
+
+.map-rows.drop-target:empty {
+  outline: 2px dashed var(--accent);
+  border-radius: 6px;
 }
 
 .map-row .reps {
@@ -836,6 +906,26 @@ body[data-view="stage"] {
   padding-top: 1vh;
 }
 
+/* A fixed, smaller size so the preview never competes with the current chart's fitText. */
+.stage-next-preview {
+  font-size: 2.6vh;
+  font-weight: 500;
+  color: var(--muted);
+  margin-top: 0.4vh;
+  overflow: hidden;
+}
+
+.stage-next-preview .chart-line {
+  flex-wrap: nowrap;
+  white-space: nowrap;
+  overflow: hidden;
+}
+
+.stage-next-preview .chord {
+  color: var(--chord);
+  opacity: 0.8;
+}
+
 .stage-next.ended {
   color: var(--danger);
   text-align: center;
@@ -945,4 +1035,76 @@ details.midi select {
 .midi-map td:last-child {
   text-align: right;
   white-space: nowrap;
+}
+
+/* No text selection while something is being dragged. */
+.is-dragging,
+.is-dragging * {
+  user-select: none;
+  cursor: grabbing;
+}
+
+.stage-position {
+  font-size: 0.8em;
+  letter-spacing: 0.04em;
+}
+
+/* Setlist being performed, in Control's live panel (issue #7). */
+.service-songs {
+  margin: 0.4rem 0;
+  padding-left: 1.4rem;
+}
+
+.service-songs li {
+  padding: 0.15rem 0.3rem;
+  border-radius: 6px;
+}
+
+.service-songs li.current {
+  background: var(--current);
+  box-shadow: inset 3px 0 0 var(--current-line);
+}
+
+.service-songs .link {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  text-align: left;
+}
+
+.start-setlist {
+  margin-top: 0.5rem;
+}
+
+/* Stage clicker pairing (issue #4): hidden unless the mouse moves or something needs attention. */
+.stage-input {
+  position: fixed;
+  right: 1.5vw;
+  bottom: 1.5vh;
+  font-size: 1.6vh;
+  color: var(--muted);
+  opacity: 0;
+  transition: opacity 0.3s;
+  pointer-events: none;
+}
+
+.stage-input.reveal,
+.stage-input.pinned {
+  opacity: 0.85;
+  pointer-events: auto;
+}
+
+/* A Song Map row that carries arrangement-only comments (issue #9). */
+.note-badge {
+  font-size: 0.8em;
+  color: var(--muted);
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 0 0.45em;
+}
+
+.inputs-list {
+  list-style: none;
+  padding: 0;
+  margin: 0.3rem 0;
 }

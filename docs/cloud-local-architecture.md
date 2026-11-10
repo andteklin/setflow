@@ -188,6 +188,20 @@ The steps below already exist on the `backend` branch:
 - local SQLite persistence and recovery;
 - MIDI mapped to commands.
 
+### Progress since this plan (2026-11)
+
+Delivered with GitHub issues #3–#9:
+
+- **Schema migrations.** `PRAGMA user_version` migrations in `store.ts` (B4). They are append-only, each runs in its own transaction, and a newer database is refused.
+- **Setlist items.** Items carry `itemId`; `notes` is still to do.
+- **Setlist performance (most of M1).** A setlist can be performed as one service.
+  - Every entry is pinned at "Start setlist". Today the pins live in the recovery snapshot, not yet in a `service_packages` table.
+  - The gateway moves between songs (NEXT after the end, PREVIOUS at Ready). Clicker, MIDI and paired inputs get this for free.
+  - Recovery restores the setlist and entry.
+  - Still to do: a separate "Prepare for service" step and a persisted, immutable package for sync (M6).
+- **Paired inputs.** Implemented as part of M8's presentation-clicker item.
+- **Arrangement-only comment lines.** Added to arrangement records. They will need to sync like any other arrangement field.
+
 ### M1 — Service package and service session (local only)
 
 - **What changes:**
