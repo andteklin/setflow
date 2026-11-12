@@ -2,6 +2,7 @@ import type { ChartLine, ChordPlacement, ParsedSong, SongMetadata, SongSection }
 
 const DIRECTIVE_RE = /^\s*\{\s*([A-Za-z_][\w-]*)\s*(?::\s*(.*?))?\s*\}\s*$/;
 const CHORD_RE = /\[([^\]]*)\]/g;
+const HIDDEN_RE = /^\s*#\s?(.*?)\s*$/;
 const COMMENT_NAMES = new Set(["comment", "c", "comment_italic", "ci", "comment_box", "cb"]);
 
 /** Directive names mapped onto structured fields. Everything else lands in `extra`. */
@@ -42,6 +43,9 @@ export function songMetadata(song: ParsedSong): SongMetadata {
 /** Split one ChordPro body line into lyrics and positioned chords, e.g. for rendering or transposing. */
 export function parseChartLine(raw: string): ChartLine {
   if (raw.trim() === "") return { kind: "blank" };
+  // ChordPro: a line starting with # is a comment for the chart's author, not the reader.
+  const hidden = HIDDEN_RE.exec(raw);
+  if (hidden) return { kind: "hidden", text: hidden[1] };
   const directive = DIRECTIVE_RE.exec(raw);
   if (directive) {
     const name = directive[1].toLowerCase();

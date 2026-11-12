@@ -2,7 +2,7 @@
  * Shapes exchanged between the host and its browser clients. Type-only and
  * free of Node imports so the web app can share them.
  */
-import type { ArrangementItem, ChartLine, CommandAck, CommandEnvelope, PerformanceState, SongMetadata } from "@setflow/core";
+import type { ArrangementItem, ArrangementNote, ChartLine, CommandAck, CommandEnvelope, PerformanceState, SongMetadata } from "@setflow/core";
 
 /** Where a song came from (spec §16.1–16.2). Content stays on this host. */
 export interface Provenance {
@@ -30,11 +30,15 @@ export interface ArrangementRecord {
   name: string;
   songMap: string;
   performanceKey: string | null;
+  /** Comment lines that belong to this arrangement only, not the song (issue #9). */
+  notes: ArrangementNote[];
   revision: number;
   updatedAt: string;
 }
 
 export interface SetlistItem {
+  /** Stable identity of this entry, so the same song can appear twice. Assigned by the host when missing. */
+  itemId: string;
   songId: string;
   arrangementId: string;
   performanceKey?: string;
@@ -99,14 +103,30 @@ export interface SessionContent {
   songMap: string;
   metadata: SongMetadata;
   sections: Array<SectionSummary & { lines: ChartLine[] }>;
+  /**
+   * The arrangement's own notes (issue #9), by planned occurrence id. Each goes
+   * after `afterLine` of the section's lines. Occurrences inserted live have none.
+   */
+  notes: Record<string, Array<{ afterLine: number; line: ChartLine }>>;
 }
 
 export interface RecoverySummary {
   title: string;
+  /** "Sunday · song 2 of 5" when the song was part of a setlist. */
+  setlist: string | null;
   arrangementName: string;
   current: string | null;
   status: PerformanceState["status"];
   savedAt: string;
+}
+
+/** The setlist being performed, as every view shows it ("Song 2 of 5", "Next song: …"). */
+export interface ServiceStatus {
+  setlistId: string;
+  name: string;
+  /** 0-based index of the loaded song. */
+  index: number;
+  items: Array<{ itemId: string; title: string; arrangementName: string; performanceKey: string }>;
 }
 
 /** The authoritative live status broadcast to every client. */
@@ -115,6 +135,8 @@ export interface LiveStatus {
   controllerId: string | null;
   title: string | null;
   recovery: RecoverySummary | null;
+  /** Set while a setlist is being performed; null for a song started on its own. */
+  service: ServiceStatus | null;
 }
 
 export type ClientRole = "control" | "stage" | "musician";
@@ -168,10 +190,32 @@ export interface MidiStatus {
   lastResult: string | null;
 }
 
+/** A device the MD approved to send clicker presses (issue #4). */
+export interface InputDevice {
+  clientId: string;
+  label: string;
+  approvedAt: string;
+}
+
+/** A device waiting for the MD to approve it. */
+export interface InputRequest {
+  clientId: string;
+  label: string;
+  requestedAt: string;
+}
+
+export interface InputDevicesStatus {
+  approved: InputDevice[];
+  pending: InputRequest[];
+}
+
 /** Messages the host sends over the LAN WebSocket. */
 export type ServerMessage =
   | { type: "status"; status: LiveStatus }
   | { type: "midi"; status: MidiStatus }
+  | { type: "inputs"; inputs: InputDevicesStatus }
+  /** The answer to a paired device's press; `message` says why it did nothing. */
+  | { type: "inputResult"; accepted: boolean; message: string | null }
   | { type: "ack"; ack: CommandAck }
   | { type: "clients"; clients: ConnectedClient[] }
   | { type: "library" }
@@ -180,4 +224,6 @@ export type ServerMessage =
 /** Messages clients send. Commands carry the same envelope as the HTTP endpoint. */
 export type ClientMessage =
   | { type: "hello"; clientId: string; role: ClientRole }
-  | { type: "command"; envelope: CommandEnvelope };
+  | { type: "command"; envelope: CommandEnvelope }
+  /** A clicker press from a paired device; the host submits it for the conductor. */
+  | { type: "input"; command: { type: "NEXT" | "PREVIOUS" } };

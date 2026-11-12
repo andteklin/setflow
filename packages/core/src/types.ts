@@ -39,6 +39,24 @@ export interface ArrangementItem {
   repetitions: number;
 }
 
+/**
+ * A comment line that belongs to one arrangement rather than the song
+ * (issue #9): e.g. "{ci: Drums out}" before the second line of Bridge 2/2
+ * in the Sunday arrangement. The song's own text is never changed.
+ */
+export interface ArrangementNote {
+  /** Index of the arrangement item the note sits in. */
+  item: number;
+  /** Which pass of that item (0-based), for an item played more than once. */
+  repetition: number;
+  /** The item's section, so a note left behind by a map change can be recognised and dropped. */
+  sectionId: string;
+  /** How many of the section's body lines come before the note (0 = straight after the heading). */
+  afterLine: number;
+  /** The ChordPro line itself: a `{comment}`/`{ci}`/`{cb}` directive or a `#` hidden line. */
+  text: string;
+}
+
 /** A section *occurrence*: one visit to a section definition in an arrangement. */
 export interface SectionOccurrence {
   id: string;
@@ -79,5 +97,11 @@ export interface ChordPlacement {
 export type ChartLine =
   | { kind: "music"; lyrics: string; chords: ChordPlacement[]; isChordOnly: boolean }
   | { kind: "comment"; text: string }
+  /**
+   * A ChordPro `#` comment line: kept in the source and exports, never shown to
+   * the band. Lets the MD switch a direction off and back on by adding or
+   * removing the `#`. `text` is the line after the `#`.
+   */
+  | { kind: "hidden"; text: string }
   | { kind: "directive"; name: string; value: string }
   | { kind: "blank" };

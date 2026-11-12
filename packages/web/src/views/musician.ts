@@ -1,4 +1,4 @@
-import { liveView, occurrenceText, renderLines } from "../chart";
+import { liveView, occurrenceLines, occurrenceText, renderLines, serviceView } from "../chart";
 import { h, load, mount, save } from "../dom";
 import type { LiveClient, LiveSnapshot } from "../live";
 
@@ -69,7 +69,7 @@ export function musicianView(root: HTMLElement, live: LiveClient): () => void {
                   occ.origin === "live" ? h("span", { class: "tag" }, "live") : null,
                   h("span", { class: "occ-badge" }),
                 ),
-                renderLines(section.lines, view.semitones),
+                renderLines(occurrenceLines(snap.content, occ, section), view.semitones),
               );
             })
           : h("p", { class: "empty" }, snap.status?.recovery ? "Waiting for the MD to resume the performance…" : "Waiting for the MD to start a song…"),
@@ -83,17 +83,26 @@ export function musicianView(root: HTMLElement, live: LiveClient): () => void {
       el.querySelector(".occ-badge")!.textContent = isCurrent ? (view.vamping ? "VAMP — UNTIL CUE" : "NOW") : id === state?.nextOccurrenceId ? (view.vamping ? "EXIT TO" : "NEXT") : "";
     }
 
+    const service = serviceView(snap.status);
     const liveText =
       view.status === "active"
-        ? `${occurrenceText(view.current?.section, view.current?.occ)}${view.vamping ? " · VAMP" : ""} → ${occurrenceText(view.next?.section, view.next?.occ) || "end"}`
+        ? `${occurrenceText(view.current?.section, view.current?.occ)}${view.vamping ? " · VAMP" : ""} → ${occurrenceText(view.next?.section, view.next?.occ) || (service.nextSong ? `next song: ${service.nextSong}` : "end")}`
         : view.status === "ready"
           ? "Ready"
           : view.status === "ended"
-            ? "Ended"
+            ? service.nextSong
+              ? `Ended · next song: ${service.nextSong}`
+              : "Ended"
             : "No song";
     mount(
       toolbar,
-      h("div", { class: "bar-title" }, h("strong", null, snap.content?.title ?? "SetFlow"), view.key ? h("span", { class: "key-pill" }, view.key) : null),
+      h(
+        "div",
+        { class: "bar-title" },
+        h("strong", null, snap.content?.title ?? "SetFlow"),
+        view.key ? h("span", { class: "key-pill" }, view.key) : null,
+        service.position ? h("span", { class: "muted small" }, service.position) : null,
+      ),
       h("div", { class: snap.connected ? "live-pill" : "live-pill stale" }, snap.connected ? "● LIVE " : "○ Disconnected — last known: ", liveText),
       following
         ? null

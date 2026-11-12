@@ -1,4 +1,4 @@
-import { parseChordPro, parseSongMap, songMetadata } from "@setflow/core";
+import { parseChordPro, parseSongMap, songMetadata, type ArrangementNote } from "@setflow/core";
 import type {
   ArrangementView,
   HostInfo,
@@ -10,13 +10,17 @@ import type {
 } from "@setflow/server/protocol";
 import { api } from "../api";
 import { h, load, mount, save } from "../dom";
+import { insertAt, isNoOpMove, moveTo, trackDrag } from "../drag";
 import type { LiveClient } from "../live";
 import { KEYS, livePanel, type StartTarget } from "./livePanel";
+import { inputsPanel } from "./inputsPanel";
 import { midiPanel } from "./midiPanel";
 
 interface DraftItem {
   token: string;
   repetitions: number;
+  /** This item's arrangement-only comments (issue #9); they move with the item. Their `item` index is set on save. */
+  notes: ArrangementNote[];
 }
 
 const NEW_SONG_TEMPLATE = `{title: New Song}
@@ -48,17 +52,25 @@ export function controlView(root: HTMLElement, live: LiveClient): () => void {
   let draftKey = "";
   let mapDirty = false;
   let sourceDirty = false;
-  let tab: "map" | "source" = load("setflow.control.tab", "map");
+  /** Unsaved comment edits in the Arranged ChordPro tab (issue #9). */
+  let arrangedDirty = false;
+  let tab: "map" | "arranged" | "source" = load("setflow.control.tab", "map");
   let setlistId: string | null = load("setflow.control.setlist", null);
+  /** The setlist entry last clicked, whose arrangement and key can be changed in place (issue #6). */
+  let editingItemId: string | null = null;
   let notice = "";
   const details = new Map<string, SongDetail>();
 
   const header = h("header", { class: "control-bar" });
   const sidebar = h("nav", { class: "library" });
   const center = h("section", { class: "song-panel" });
-  const panel = livePanel(live, startTarget);
+  const panel = livePanel(live, startTarget, () => {
+    const s = currentSetlist();
+    return s ? { setlistId: s.id, name: s.name, count: s.items.length } : null;
+  });
   const midi = midiPanel(live);
-  mount(root, header, h("div", { class: "control-grid" }, sidebar, center, h("aside", { class: "live-panel" }, panel.el, midi.el)));
+  const inputs = inputsPanel(live);
+  mount(root, header, h("div", { class: "control-grid" }, sidebar, center, h("aside", { class: "live-panel" }, panel.el, inputs.el, midi.el)));
 
   function arrangement(): ArrangementView | undefined {
     return detail?.arrangements.find((a) => a.id === arrangementId);
@@ -91,10 +103,12 @@ export function controlView(root: HTMLElement, live: LiveClient): () => void {
       [...new Set(currentSetlist()?.items.map((i) => i.songId) ?? [])].map(async (id) => details.set(id, await api<SongDetail>("GET", `/api/songs/${id}`))),
     );
     renderSidebar();
+    panel.refresh();
   }
 
   async function selectSong(id: string, preferArrangement?: string, preferKey?: string) {
-    if ((mapDirty || sourceDirty) && !confirm("Discard unsaved changes to this song?")) return;
+    if ((mapDirty || sourceDirty || arrangedDirty) && !confirm("Discard unsaved changes to this song?")) return;
+    arrangedDirty = false;
     detail = await api<SongDetail>("GET", `/api/songs/${id}`);
     details.set(id, detail);
     const pick = detail.arrangements.find((a) => a.id === preferArrangement) ?? detail.arrangements.find((a) => a.id === arrangementId) ?? detail.arrangements[0];
@@ -109,7 +123,7 @@ export function controlView(root: HTMLElement, live: LiveClient): () => void {
     arrangementId = id;
     const a = arrangement();
     const tokens = new Map(detail?.sections.map((s) => [s.id, s.token]) ?? []);
-    draft = a?.items?.map((i) => ({ token: tokens.get(i.sectionId) ?? "?", repetitions: i.repetitions })) ?? [];
+    draft = a?.items?.map((i, index) => ({ token: tokens.get(i.sectionId) ?? "?", repetitions: i.repetitions, notes: a.notes.filter((n) => n.item === index) })) ?? [];
     draftKey = preferKey ?? a?.performanceKey ?? "";
     mapDirty = false;
     panel.refresh();
@@ -200,7 +214,7 @@ export function controlView(root: HTMLElement, live: LiveClient): () => void {
     return list.map((s) =>
       h(
         "li",
-        { class: s.id === detail?.song.id ? "selected" : "", onclick: () => void selectSong(s.id).catch(fail) },
+        { class: s.id === detail?.song.id ? "selected" : "", onclick: () => { editingItemId = null; void selectSong(s.id).catch(fail); } },
         h("span", null, s.title),
         h("span", { class: "muted small" }, [s.originalKey, s.artist].filter(Boolean).join(" · ")),
       ),
@@ -208,31 +222,55 @@ export function controlView(root: HTMLElement, live: LiveClient): () => void {
   }
 
   function renderSetlist(setlist: SetlistRecord) {
-    const saveItems = (items: SetlistItem[]) =>
+    // New entries have no itemId yet; the host assigns one.
+    const saveItems = (items: Array<Omit<SetlistItem, "itemId"> & { itemId?: string }>) =>
       api("PUT", `/api/setlists/${setlist.id}`, { name: setlist.name, items }).then(loadLibrary).catch(fail);
-    const move = (i: number, by: number) => {
-      const items = [...setlist.items];
-      const [item] = items.splice(i, 1);
-      items.splice(Math.max(0, Math.min(items.length, i + by)), 0, item);
-      void saveItems(items);
+    const updateItem = (i: number, patch: Partial<SetlistItem>) => {
+      const items = setlist.items.map((item, j) => (j === i ? { ...item, ...patch } : item));
+      if (!patch.performanceKey && "performanceKey" in patch) delete items[i].performanceKey;
+      void saveItems(items).then(() => {
+        // Show the change in the editor too, unless the MD has unsaved edits there.
+        const item = items[i];
+        if (detail?.song.id === item.songId && !mapDirty) {
+          selectArrangement(item.arrangementId, item.performanceKey);
+          renderCenter();
+        }
+      });
     };
+    const move = (i: number, by: number) => void saveItems(moveTo(setlist.items, i, by < 0 ? i - 1 : i + 2));
     const target = startTarget();
-    return h(
-      "div",
-      { class: "setlist" },
-      h(
-        "ol",
-        null,
-        setlist.items.map((item, i) => {
+    const list = h("ol");
+    mount(
+      list,
+      setlist.items.map((item, i) => {
           const d = details.get(item.songId);
           const a = d?.arrangements.find((x) => x.id === item.arrangementId);
-          const active = item.songId === detail?.song.id && item.arrangementId === arrangementId;
-          return h(
+          const editing = item.itemId === editingItemId;
+          const active = editing || (!editingItemId && item.songId === detail?.song.id && item.arrangementId === arrangementId);
+          const row: HTMLElement = h(
             "li",
-            { class: active ? "selected" : "" },
+            {
+              class: active ? "setlist-row selected" : "setlist-row",
+              onpointerdown: (e: PointerEvent) => {
+                if (!canStartRowDrag(e)) return;
+                trackDrag(e, {
+                  source: row,
+                  list,
+                  rowSelector: ".setlist-row",
+                  onDrop: (to) => !isNoOpMove(i, to) && void saveItems(moveTo(setlist.items, i, to)),
+                });
+              },
+            },
+            h("span", { class: "grip", title: "Drag to move" }, "⋮⋮"),
             h(
               "button",
-              { class: "link", onclick: () => void selectSong(item.songId, item.arrangementId, item.performanceKey).catch(fail) },
+              {
+                class: "link",
+                onclick: () => {
+                  editingItemId = item.itemId;
+                  void selectSong(item.songId, item.arrangementId, item.performanceKey).catch(fail);
+                },
+              },
               h("span", null, d?.song.title ?? "…"),
               h("span", { class: "muted small" }, [a?.name, item.performanceKey && `Key ${item.performanceKey}`].filter(Boolean).join(" · ")),
             ),
@@ -243,9 +281,15 @@ export function controlView(root: HTMLElement, live: LiveClient): () => void {
               h("button", { class: "icon", title: "Move down", disabled: i === setlist.items.length - 1, onclick: () => move(i, 1) }, "↓"),
               h("button", { class: "icon", title: "Remove", onclick: () => void saveItems(setlist.items.filter((_, j) => j !== i)) }, "×"),
             ),
+            editing && d ? setlistItemEditor(item, d, (patch) => updateItem(i, patch)) : null,
           );
+          return row;
         }),
-      ),
+    );
+    return h(
+      "div",
+      { class: "setlist" },
+      list,
       h(
         "div",
         { class: "row wrap" },
@@ -303,13 +347,18 @@ export function controlView(root: HTMLElement, live: LiveClient): () => void {
         "div",
         { class: "tabs" },
         h("button", { class: tab === "map" ? "active" : "", onclick: () => setTab("map") }, "Song Map"),
+        h("button", { class: tab === "arranged" ? "active" : "", onclick: () => setTab("arranged") }, "Arranged ChordPro"),
         h("button", { class: tab === "source" ? "active" : "", onclick: () => setTab("source") }, "ChordPro source"),
       ),
-      tab === "map" ? renderMapEditor() : renderSourceEditor(),
+      tab === "map" ? renderMapEditor() : tab === "arranged" ? renderArrangedEditor() : renderSourceEditor(),
     );
   }
 
   function setTab(next: typeof tab) {
+    if (tab === "arranged" && next !== tab && arrangedDirty) {
+      if (!confirm("Discard unsaved comments in the arranged chart?")) return;
+      arrangedDirty = false;
+    }
     tab = next;
     save("setflow.control.tab", tab);
     renderCenter();
@@ -345,7 +394,7 @@ export function controlView(root: HTMLElement, live: LiveClient): () => void {
         const parsed = parseChordPro(d.song.sourceText);
         const tokens = new Map(parsed.sections.map((s) => [s.id, s.token]));
         // Parsed locally with the same rules the host uses; the host validates again on save.
-        draft = textInput.value.trim() ? parseSongMap(textInput.value, parsed).map((i) => ({ token: tokens.get(i.sectionId)!, repetitions: i.repetitions })) : [];
+        draft = textInput.value.trim() ? parseSongMap(textInput.value, parsed).map((i) => ({ token: tokens.get(i.sectionId)!, repetitions: i.repetitions, notes: [] })) : [];
         textError.textContent = "";
         touch();
       } catch (err) {
@@ -353,64 +402,85 @@ export function controlView(root: HTMLElement, live: LiveClient): () => void {
       }
     });
 
-    let dragFrom = -1;
     const drawEditor = () => {
       textInput.value = mapText();
+      // Pointer drag (issue #5): rows reorder, palette chips insert where dropped. Buttons stay the non-drag path.
+      const rows = h("ol", { class: "map-rows" });
+      const dragRow = (i: number, row: HTMLElement) => (e: PointerEvent) => {
+        if (!canStartRowDrag(e)) return;
+        trackDrag(e, {
+          source: row,
+          list: rows,
+          rowSelector: ".map-row",
+          onDrop: (to) => {
+            if (isNoOpMove(i, to)) return;
+            draft = moveTo(draft, i, to);
+            touch();
+          },
+        });
+      };
+      const dragChip = (token: string) => (e: PointerEvent) =>
+        trackDrag(e, {
+          source: e.currentTarget as HTMLElement,
+          list: rows,
+          rowSelector: ".map-row",
+          onDrop: (to) => {
+            draft = insertAt(draft, to, { token, repetitions: 1, notes: [] });
+            touch();
+          },
+        });
+      mount(
+        rows,
+        draft.map((item, i) => {
+          const section = byToken.get(item.token);
+          const row: HTMLElement = h(
+            "li",
+            {
+              class: `map-row type-${section?.type ?? "custom"}`,
+              onpointerdown: (e: PointerEvent) => dragRow(i, row)(e),
+            },
+            h("span", { class: "grip", title: "Drag to move" }, "⋮⋮"),
+            h("span", { class: "token" }, item.token),
+            h("span", { class: "label" }, section?.sourceLabel ?? "Unknown section"),
+            item.notes.length ? h("span", { class: "note-badge", title: item.notes.map((n) => n.text).join("\n") }, `✎ ${item.notes.length}`) : null,
+            h(
+              "span",
+              { class: "reps" },
+              h("button", { class: "icon", title: "Fewer repeats", disabled: item.repetitions <= 1, onclick: () => { item.repetitions--; touch(); } }, "−"),
+              h("span", null, `×${item.repetitions}`),
+              h("button", { class: "icon", title: "More repeats", onclick: () => { item.repetitions++; touch(); } }, "+"),
+            ),
+            h("button", { class: "icon", title: "Move up", disabled: i === 0, onclick: () => { draft = moveTo(draft, i, i - 1); touch(); } }, "↑"),
+            h("button", { class: "icon", title: "Move down", disabled: i === draft.length - 1, onclick: () => { draft = moveTo(draft, i, i + 2); touch(); } }, "↓"),
+            h("button", { class: "icon", title: "Duplicate", onclick: () => { draft.splice(i + 1, 0, { ...item, notes: [] }); touch(); } }, "⧉"),
+            h("button", { class: "icon", title: "Remove", onclick: () => { draft.splice(i, 1); touch(); } }, "×"),
+          );
+          return row;
+        }),
+      );
       mount(
         editor,
-        h("h4", null, "Available sections ", h("span", { class: "muted small" }, "click to add")),
+        h("h4", null, "Available sections ", h("span", { class: "muted small" }, "click to add at the end, or drag into place")),
         h(
           "div",
           { class: "palette" },
           d.sections.map((s) =>
             h(
               "button",
-              { class: `section-chip type-${s.type}`, title: s.sourceLabel, onclick: () => { draft.push({ token: s.token, repetitions: 1 }); touch(); } },
+              {
+                class: `section-chip type-${s.type}`,
+                title: s.sourceLabel,
+                onpointerdown: dragChip(s.token),
+                onclick: () => { draft.push({ token: s.token, repetitions: 1, notes: [] }); touch(); },
+              },
               h("span", { class: "token" }, s.token),
               h("span", { class: "small" }, s.displayLabel),
             ),
           ),
         ),
         h("h4", null, "Arrangement ", h("span", { class: "muted small" }, "drag to reorder")),
-        draft.length === 0 ? h("p", { class: "muted" }, "Empty — add sections above.") : null,
-        h(
-          "ol",
-          { class: "map-rows" },
-          draft.map((item, i) => {
-            const section = byToken.get(item.token);
-            const row = h(
-              "li",
-              {
-                class: `map-row type-${section?.type ?? "custom"}`,
-                draggable: true,
-                ondragstart: () => (dragFrom = i),
-                ondragover: (e: DragEvent) => e.preventDefault(),
-                ondrop: (e: DragEvent) => {
-                  e.preventDefault();
-                  if (dragFrom < 0 || dragFrom === i) return;
-                  const [moved] = draft.splice(dragFrom, 1);
-                  draft.splice(i, 0, moved);
-                  dragFrom = -1;
-                  touch();
-                },
-              },
-              h("span", { class: "grip" }, "⋮⋮"),
-              h("span", { class: "token" }, item.token),
-              h("span", { class: "label" }, section?.sourceLabel ?? "Unknown section"),
-              h(
-                "span",
-                { class: "reps" },
-                h("button", { class: "icon", title: "Fewer repeats", disabled: item.repetitions <= 1, onclick: () => { item.repetitions--; touch(); } }, "−"),
-                h("span", null, `×${item.repetitions}`),
-                h("button", { class: "icon", title: "More repeats", onclick: () => { item.repetitions++; touch(); } }, "+"),
-              ),
-              h("button", { class: "icon", title: "Move up", disabled: i === 0, onclick: () => { [draft[i - 1], draft[i]] = [draft[i], draft[i - 1]]; touch(); } }, "↑"),
-              h("button", { class: "icon", title: "Duplicate", onclick: () => { draft.splice(i + 1, 0, { ...item }); touch(); } }, "⧉"),
-              h("button", { class: "icon", title: "Remove", onclick: () => { draft.splice(i, 1); touch(); } }, "×"),
-            );
-            return row;
-          }),
-        ),
+        draft.length === 0 ? h("p", { class: "muted" }, "Empty — click or drag sections here.") : null,
+        rows,
         h("label", { class: "stack" }, "Song map ", textInput, textError),
         h(
           "div",
@@ -470,8 +540,10 @@ export function controlView(root: HTMLElement, live: LiveClient): () => void {
     const a = arrangement();
     if (!a) return;
     const songMap = draft.map((i) => (i.repetitions > 1 ? `${i.token}*${i.repetitions}` : i.token)).join(", ");
+    // Re-index each item's notes to its new position; a pass that no longer exists loses its notes.
+    const notes = draft.flatMap((d, item) => d.notes.filter((n) => n.repetition < d.repetitions).map((n) => ({ ...n, item })));
     try {
-      await api("PUT", `/api/arrangements/${a.id}`, { songMap, performanceKey: draftKey || null, expectedRevision: a.revision });
+      await api("PUT", `/api/arrangements/${a.id}`, { songMap, notes, performanceKey: draftKey || null, expectedRevision: a.revision });
       mapDirty = false;
       await reloadSong();
     } catch (err) {
@@ -503,7 +575,7 @@ export function controlView(root: HTMLElement, live: LiveClient): () => void {
         h("p", null, h("strong", null, m.title || "(no title)"), m.originalKey ? ` · Key ${m.originalKey}` : ""),
         h("ol", { class: "detected" }, parsed.sections.map((s) => h("li", null, h("span", { class: "token" }, s.token), " ", s.sourceLabel, h("span", { class: "muted small" }, ` ${s.type}`)))),
         parsed.sections.length === 0 ? h("p", { class: "error" }, "No sections detected.") : null,
-        h("p", { class: "muted small" }, "Sections start at {comment: Verse 1} style lines. Other comments stay with their section as notes. Rename a section here to correct its type."),
+        h("p", { class: "muted small" }, "Sections start at {comment: Verse 1} style lines. Other comments stay with their section as notes. Start a line with # to hide it from the band (the MD still sees it). Rename a section here to correct its type."),
       );
     };
     let timer = 0;
@@ -537,6 +609,76 @@ export function controlView(root: HTMLElement, live: LiveClient): () => void {
       { class: "source-editor" },
       h("div", { class: "stack grow" }, area, h("div", { class: "row" }, saveButton, h("span", { class: "muted small" }, `Revision ${d.song.revision} · imported via ${d.song.provenance.providerId}${d.song.provenance.fileName ? ` (${d.song.provenance.fileName})` : ""} · stored on this host only`))),
       preview,
+    );
+  }
+
+  /**
+   * The saved arrangement as one chronological ChordPro chart (issue #9).
+   * The song's own comments carry through; comment lines added here belong
+   * to this arrangement only. Chords and lyrics are edited in the source.
+   */
+  function renderArrangedEditor() {
+    const a = arrangement();
+    if (!a) return h("p", { class: "muted" }, "Choose an arrangement.");
+    if (a.items === null) return h("div", { class: "banner error" }, `This arrangement no longer matches the song: ${a.error}. Fix it in the Song Map tab first.`);
+
+    let revision = a.revision;
+    const area = h("textarea", { class: "source", spellcheck: false, disabled: true, value: "Loading…" });
+    const problem = h("div");
+    const saved = h("span", { class: "muted small" });
+    const saveButton = h("button", { class: "primary", disabled: true }, "Save comments");
+    const fileName = `${detail!.song.title} - ${a.name}.cho`.replace(/[\\/:*?"<>|]/g, "_");
+
+    void api<{ text: string; revision: number }>("GET", `/api/arrangements/${a.id}/chordpro`).then(
+      (r) => {
+        area.value = r.text;
+        area.disabled = false;
+        revision = r.revision;
+      },
+      (err: Error) => mount(problem, h("div", { class: "banner error" }, err.message)),
+    );
+    area.addEventListener("input", () => {
+      arrangedDirty = true;
+      saveButton.disabled = false;
+      saved.textContent = "";
+    });
+    saveButton.addEventListener("click", async () => {
+      try {
+        await api("PUT", `/api/arrangements/${a.id}/chordpro`, { text: area.value, expectedRevision: revision });
+        arrangedDirty = false;
+        mount(problem);
+        await reloadSong();
+      } catch (err) {
+        mount(problem, h("div", { class: "banner error" }, (err as Error).message));
+      }
+    });
+
+    return h(
+      "div",
+      { class: "source-editor" },
+      h(
+        "div",
+        { class: "stack grow" },
+        mapDirty ? h("div", { class: "banner warn" }, "This shows the saved arrangement. Save or revert the Song Map first to see your changes here.") : null,
+        problem,
+        area,
+        h(
+          "div",
+          { class: "row wrap" },
+          saveButton,
+          h("button", { onclick: () => void navigator.clipboard?.writeText(area.value).then(() => (saved.textContent = "Copied")) }, "Copy"),
+          h("button", { onclick: () => download(fileName, area.value) }, "Download .cho"),
+          saved,
+        ),
+      ),
+      h(
+        "div",
+        { class: "source-preview" },
+        h("h4", null, "Comments for this arrangement"),
+        h("p", null, "Add comment lines anywhere inside a section. They show for this arrangement only; the song and its other arrangements are unchanged."),
+        h("ul", { class: "small" }, h("li", null, h("code", null, "{ci: Drums out}"), " — shown to the band"), h("li", null, h("code", null, "# Watch the leader"), " — MD only, hidden from Stage and Musician")),
+        h("p", { class: "muted small" }, "Comments already in the song source appear here too; change those, and chords or lyrics, in the ChordPro source tab. A comment stays with its section when you reorder the Song Map."),
+      ),
     );
   }
 
@@ -623,11 +765,11 @@ export function controlView(root: HTMLElement, live: LiveClient): () => void {
 
   const unsubscribeLibrary = live.onLibraryChange(() => {
     void loadLibrary();
-    if (detail && !mapDirty && !sourceDirty) void reloadSong().catch(() => { detail = null; renderCenter(); });
+    if (detail && !mapDirty && !sourceDirty && !arrangedDirty) void reloadSong().catch(() => { detail = null; renderCenter(); });
   });
   const unsubscribeLive = live.subscribe(renderHeader);
   const beforeUnload = (e: BeforeUnloadEvent) => {
-    if (mapDirty || sourceDirty) e.preventDefault();
+    if (mapDirty || sourceDirty || arrangedDirty) e.preventDefault();
   };
   window.addEventListener("beforeunload", beforeUnload);
 
@@ -639,8 +781,61 @@ export function controlView(root: HTMLElement, live: LiveClient): () => void {
     unsubscribeLive();
     panel.dispose();
     midi.dispose();
+    inputs.dispose();
     window.removeEventListener("beforeunload", beforeUnload);
   };
+}
+
+/** Save text as a file in the browser, e.g. an arranged .cho chart for another app. */
+function download(name: string, text: string): void {
+  const url = URL.createObjectURL(new Blob([text], { type: "text/plain;charset=utf-8" }));
+  const link = h("a", { href: url, download: name });
+  document.body.append(link);
+  link.click();
+  link.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
+/**
+ * Whether a press on a row may start dragging it. A mouse can grab the row
+ * anywhere; touch and pen must use the grip so a swipe still scrolls the page.
+ * Presses on the row's own buttons and pickers are always left to them.
+ */
+function canStartRowDrag(e: PointerEvent): boolean {
+  const target = e.target as HTMLElement;
+  if (target.closest(".icon, select, input")) return false;
+  return e.pointerType === "mouse" || target.closest(".grip") !== null;
+}
+
+/** Arrangement and key pickers for one setlist entry, shown under it once it is selected. */
+function setlistItemEditor(item: SetlistItem, song: SongDetail, change: (patch: Partial<SetlistItem>) => void): HTMLElement {
+  const arrangement = song.arrangements.find((a) => a.id === item.arrangementId);
+  const defaultKey = arrangement?.performanceKey || song.metadata.originalKey;
+  return h(
+    "div",
+    { class: "setlist-item-editor" },
+    h(
+      "label",
+      null,
+      "Arrangement ",
+      h(
+        "select",
+        { onchange: (e: Event) => change({ arrangementId: (e.target as HTMLSelectElement).value }) },
+        song.arrangements.map((a) => h("option", { value: a.id, selected: a.id === item.arrangementId, disabled: a.items === null }, a.items === null ? `⚠ ${a.name}` : a.name)),
+      ),
+    ),
+    h(
+      "label",
+      null,
+      "Key ",
+      h(
+        "select",
+        { onchange: (e: Event) => change({ performanceKey: (e.target as HTMLSelectElement).value || undefined }) },
+        h("option", { value: "", selected: !item.performanceKey }, `Arrangement's${defaultKey ? ` (${defaultKey})` : ""}`),
+        keyChoices(song.metadata.originalKey, item.performanceKey ?? "").map((k) => h("option", { value: k, selected: k === item.performanceKey }, k)),
+      ),
+    ),
+  );
 }
 
 function keyChoices(original: string | undefined, current: string): string[] {

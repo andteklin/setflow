@@ -9,6 +9,7 @@ import {
   parseChordPro,
   parseSongMap,
   semitoneDistance,
+  serializeChordPro,
   songMetadata,
   sourceOrderArrangement,
   transposeChartLine,
@@ -66,6 +67,19 @@ describe("chart lines (spec §13–14)", () => {
     assert.deepEqual(parseChartLine("{comment: Build here}"), { kind: "comment", text: "Build here" });
     assert.deepEqual(parseChartLine("{start_of_tab}"), { kind: "directive", name: "start_of_tab", value: "" });
     assert.deepEqual(parseChartLine("  "), { kind: "blank" });
+  });
+
+  it("hides # comment lines from the band but keeps them in the source (issue #8)", () => {
+    assert.deepEqual(parseChartLine("# Drums out"), { kind: "hidden", text: "Drums out" });
+    assert.deepEqual(parseChartLine("  #{comment: Build here}"), { kind: "hidden", text: "{comment: Build here}" });
+    // A sharp inside a line is a chord, not a comment.
+    assert.equal(parseChartLine("[C#m]Lift your [F#]eyes").kind, "music");
+
+    const text = "{title: X}\n\n{comment: Verse 1}\n[C]Line one\n# {comment: Bridge}\n# Acoustic only\n[F]Line two\n";
+    const parsed = parseChordPro(text);
+    assert.deepEqual(parsed.sections.map((s) => s.token), ["V1"], "a commented-out marker starts no section");
+    assert.deepEqual(chartLines(parsed.sections[0]).map((l) => l.kind), ["music", "hidden", "hidden", "music"]);
+    assert.match(serializeChordPro(parsed, applyArrangement(parsed, sourceOrderArrangement(parsed))), /# Acoustic only/);
   });
 
   it("rebuilds each raw line from its parts", () => {

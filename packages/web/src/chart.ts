@@ -1,5 +1,5 @@
 import { semitoneDistance, transposeChartLine, type ChartLine, type PerformanceState, type SectionOccurrence } from "@setflow/core";
-import type { SessionContent } from "@setflow/server/protocol";
+import type { LiveStatus, SessionContent } from "@setflow/server/protocol";
 import { h } from "./dom";
 
 export type ContentSection = SessionContent["sections"][number];
@@ -56,8 +56,13 @@ export function liveView(state: PerformanceState | null, content: SessionContent
   };
 }
 
+export interface RenderOptions {
+  /** Show `#` comment lines, dimmed. Only the MD's own views do; band displays never show them. */
+  showHidden?: boolean;
+}
+
 /** Render chart lines with chords above the lyric syllable they belong to. */
-export function renderLines(lines: readonly ChartLine[], semitones: number): HTMLElement {
+export function renderLines(lines: readonly ChartLine[], semitones: number, options: RenderOptions = {}): HTMLElement {
   const body = h("div", { class: "chart" });
   for (const raw of lines) {
     const line = transposeChartLine(raw, semitones);
@@ -67,6 +72,9 @@ export function renderLines(lines: readonly ChartLine[], semitones: number): HTM
         break;
       case "comment":
         body.append(h("div", { class: "chart-note" }, line.text));
+        break;
+      case "hidden":
+        if (options.showHidden) body.append(h("div", { class: "chart-hidden", title: "Hidden from Stage and Musician views" }, "# ", line.text));
         break;
       case "directive":
         break;
@@ -99,6 +107,42 @@ function chunk(chord: string | null, lyric: string, chordOnly = false): HTMLElem
     chordOnly ? null : h("span", { class: "lyric" }, lyric),
     chordOnly && lyric.trim() === "" ? h("span", { class: "spacer" }, lyric) : null,
   );
+}
+
+/**
+ * A section's lines as played at one occurrence: the section's own lines
+ * with that occurrence's arrangement notes woven in (issue #9).
+ */
+export function occurrenceLines(content: SessionContent | null, occ: SectionOccurrence, section: ContentSection): ChartLine[] {
+  const notes = content?.notes?.[occ.id];
+  if (!notes?.length) return section.lines;
+  const out: ChartLine[] = [];
+  const at = (pos: number) => notes.filter((n) => Math.min(n.afterLine, section.lines.length) === pos).map((n) => n.line);
+  out.push(...at(0));
+  section.lines.forEach((line, i) => out.push(line, ...at(i + 1)));
+  return out;
+}
+
+export interface ServiceView {
+  /** "Song 2 of 5", or "" outside a setlist. */
+  position: string;
+  /** Title of the song after this one in the setlist, if any. */
+  nextSong: string | null;
+}
+
+/** Where the band is in the setlist being performed (issue #7). */
+export function serviceView(status: LiveStatus | null): ServiceView {
+  const service = status?.service;
+  if (!service) return { position: "", nextSong: null };
+  return {
+    position: `Song ${service.index + 1} of ${service.items.length}`,
+    nextSong: service.items[service.index + 1]?.title ?? null,
+  };
+}
+
+/** The first `count` lines the band would read in a section: music and notes, not gaps or hidden lines. */
+export function previewLines(lines: readonly ChartLine[], count: number): ChartLine[] {
+  return lines.filter((l) => l.kind === "music" || l.kind === "comment").slice(0, count);
 }
 
 /** Shrink an element's font until its content fits both ways, for fixed-size stage displays. */

@@ -1,5 +1,5 @@
-import type { CommandAck, PerformanceCommand } from "@setflow/core";
-import type { ClientRole, ConnectedClient, LiveStatus, MidiStatus, ServerMessage, SessionContent } from "@setflow/server/protocol";
+import type { CommandAck, PerformanceCommand, PerformanceState } from "@setflow/core";
+import type { ClientRole, ConnectedClient, InputDevicesStatus, LiveStatus, MidiStatus, ServerMessage, SessionContent } from "@setflow/server/protocol";
 import { api, clientId, newId } from "./api";
 
 export interface LiveSnapshot {
@@ -7,9 +7,20 @@ export interface LiveSnapshot {
   content: SessionContent | null;
   connected: boolean;
   clients: ConnectedClient[];
+  /** Devices approved, or asking, to send clicker presses (issue #4). */
+  inputs: InputDevicesStatus | null;
 }
 
 type Pending = { resolve: (ack: CommandAck) => void; reject: (err: Error) => void; timer: number };
+
+/** Presses beyond this many unanswered ones are refused rather than piling up. */
+const MAX_QUEUED_COMMANDS = 8;
+
+/** The later of two states of the same session; a state from another session never wins over the snapshot. */
+function newest(snapshot: PerformanceState | null | undefined, ack: PerformanceState | null): PerformanceState | null | undefined {
+  if (!snapshot || !ack || ack.sessionId !== snapshot.sessionId) return snapshot;
+  return ack.revision > snapshot.revision ? ack : snapshot;
+}
 
 /**
  * One browser's connection to the host (spec §23). Applies only newer
@@ -19,12 +30,18 @@ type Pending = { resolve: (ack: CommandAck) => void; reject: (err: Error) => voi
 export class LiveClient {
   private ws: WebSocket | null = null;
   private retryMs = 500;
-  private snapshot: LiveSnapshot = { status: null, content: null, connected: false, clients: [] };
+  private snapshot: LiveSnapshot = { status: null, content: null, connected: false, clients: [], inputs: null };
   private readonly listeners = new Set<(s: LiveSnapshot) => void>();
   private readonly libraryListeners = new Set<() => void>();
   private readonly midiListeners = new Set<(status: MidiStatus) => void>();
   private readonly pending = new Map<string, Pending>();
   private queue: Promise<void> = Promise.resolve();
+  private commands: Promise<unknown> = Promise.resolve();
+  private inFlight = 0;
+  /** Paired-input presses awaiting their answer, oldest first; the host answers in order. */
+  private inputAnswers: Array<(message: string | null) => void> = [];
+  /** State from the latest ack; snapshots apply asynchronously, so it can be ahead of `snapshot`. */
+  private lastAckState: PerformanceState | null = null;
   private closed = false;
 
   constructor(private readonly role: ClientRole) {
@@ -37,6 +54,24 @@ export class LiveClient {
 
   get isConductor(): boolean {
     return this.snapshot.status?.controllerId === clientId;
+  }
+
+  /** True when the MD has approved this device to send clicker presses. */
+  get isPairedInput(): boolean {
+    return this.snapshot.inputs?.approved.some((d) => d.clientId === clientId) ?? false;
+  }
+
+  /**
+   * Send a clicker press from a paired device. The host submits it for the
+   * conductor; resolves with why nothing happened, or null when it was applied.
+   */
+  input(type: "NEXT" | "PREVIOUS"): Promise<string | null> {
+    const ws = this.ws;
+    if (!ws || ws.readyState !== WebSocket.OPEN || !this.snapshot.connected) return Promise.resolve("Disconnected from the host");
+    return new Promise((resolve) => {
+      this.inputAnswers.push(resolve);
+      ws.send(JSON.stringify({ type: "input", command: { type } }));
+    });
   }
 
   subscribe(listener: (s: LiveSnapshot) => void): () => void {
@@ -55,9 +90,25 @@ export class LiveClient {
     return () => this.midiListeners.delete(listener);
   }
 
-  /** Send a command to the host. Resolves with the host's acknowledgement. */
+  /**
+   * Send a command to the host. Resolves with the host's acknowledgement.
+   *
+   * Presses are sent one at a time: each waits for the previous answer and
+   * then carries the revision that answer produced. Without this, a second
+   * clicker press made before the first ack would be rejected as stale. A
+   * press is never held across a disconnect (spec §23); it fails instead.
+   */
   command(command: PerformanceCommand): Promise<CommandAck> {
-    const state = this.snapshot.status?.state;
+    if (this.inFlight >= MAX_QUEUED_COMMANDS) return Promise.reject(new Error("Too many presses waiting for the host"));
+    this.inFlight++;
+    const run = () => this.sendNow(command);
+    const result = this.commands.then(run, run).finally(() => this.inFlight--);
+    this.commands = result.catch(() => undefined);
+    return result;
+  }
+
+  private sendNow(command: PerformanceCommand): Promise<CommandAck> {
+    const state = newest(this.snapshot.status?.state, this.lastAckState);
     const ws = this.ws;
     if (!ws || ws.readyState !== WebSocket.OPEN || !this.snapshot.connected) {
       return Promise.reject(new Error("Disconnected from the host"));
@@ -107,6 +158,7 @@ export class LiveClient {
         p.reject(new Error("Disconnected from the host"));
         this.pending.delete(id);
       }
+      for (const answer of this.inputAnswers.splice(0)) answer("Disconnected from the host");
       this.update({ connected: false });
       if (!this.closed) {
         window.setTimeout(() => this.connect(), this.retryMs);
@@ -121,7 +173,8 @@ export class LiveClient {
         this.enqueue(message.status, true);
         break;
       case "ack": {
-        if (this.snapshot.status) this.enqueue({ ...this.snapshot.status, state: message.ack.state });
+        this.lastAckState = message.ack.state;
+        if (this.snapshot.status)this.enqueue({ ...this.snapshot.status, state: message.ack.state });
         const pending = this.pending.get(message.ack.commandId);
         if (pending) {
           clearTimeout(pending.timer);
@@ -132,6 +185,12 @@ export class LiveClient {
       }
       case "clients":
         this.update({ clients: message.clients });
+        break;
+      case "inputs":
+        this.update({ inputs: message.inputs });
+        break;
+      case "inputResult":
+        this.inputAnswers.shift()?.(message.accepted ? null : message.message);
         break;
       case "midi":
         for (const l of this.midiListeners) l(message.status);

@@ -1,10 +1,17 @@
+import { randomUUID } from "node:crypto";
 import {
+  ArrangedEditError,
+  arrangedChordPro,
+  fitNotes,
   formatSongMap,
+  isNoteLine,
+  parseArrangedNotes,
   parseChordPro,
   parseSongMap,
   songMetadata,
   sourceOrderArrangement,
   type ArrangementItem,
+  type ArrangementNote,
   type ParsedSong,
 } from "@setflow/core";
 import type {
@@ -169,19 +176,53 @@ export class Library {
 
   updateArrangement(
     id: string,
-    input: { name?: string; songMap?: string; performanceKey?: string | null; expectedRevision?: number },
+    input: { name?: string; songMap?: string; performanceKey?: string | null; notes?: unknown; expectedRevision?: number },
   ): ArrangementView {
     const current = this.getArrangement(id);
     if (input.expectedRevision !== undefined && input.expectedRevision !== current.revision) {
       throw new HttpError(409, `Arrangement changed since you opened it (revision ${current.revision}); reload and retry.`);
     }
     const parsed = parseChordPro(this.getSong(current.songId).sourceText);
+    const songMap = input.songMap !== undefined ? this.canonicalMap(parsed, input.songMap) : current.songMap;
+    // Notes travel with the map: the editor re-indexes them when it reorders items. Any that no longer fit are dropped.
+    const notes = input.notes !== undefined ? validateNotes(input.notes) : current.notes;
     const record = this.store.updateArrangement(id, {
       name: input.name !== undefined ? required(input.name, "Arrangement name").trim() : current.name,
-      songMap: input.songMap !== undefined ? this.canonicalMap(parsed, input.songMap) : current.songMap,
+      songMap,
       performanceKey: input.performanceKey !== undefined ? input.performanceKey || null : current.performanceKey,
+      notes: fitNotes(parsed, resolveSongMap(parsed, songMap), notes),
     });
     return this.view(parsed, record);
+  }
+
+  /** The arrangement as one chronological ChordPro chart, with its own notes woven in (issue #9). */
+  arrangedChordPro(id: string): { text: string; revision: number } {
+    const a = this.getArrangement(id);
+    const parsed = parseChordPro(this.getSong(a.songId).sourceText);
+    const items = this.resolveOrFail(parsed, a);
+    return { text: arrangedChordPro(parsed, items, a.notes, { songMap: a.songMap }), revision: a.revision };
+  }
+
+  /**
+   * Save an edited arranged chart. Only comment lines may change: they become
+   * the arrangement's notes. The song's own lines are refused, with the line
+   * number, because they belong to the shared source (spec §2.3).
+   */
+  saveArrangedChordPro(id: string, text: unknown, expectedRevision?: number): ArrangementView {
+    const a = this.getArrangement(id);
+    if (expectedRevision !== undefined && expectedRevision !== a.revision) {
+      throw new HttpError(409, `Arrangement changed since you opened it (revision ${a.revision}); reload and retry.`);
+    }
+    const parsed = parseChordPro(this.getSong(a.songId).sourceText);
+    const items = this.resolveOrFail(parsed, a);
+    let notes: ArrangementNote[];
+    try {
+      notes = parseArrangedNotes(parsed, items, required(text, "Arranged ChordPro"), { songMap: a.songMap });
+    } catch (err) {
+      if (err instanceof ArrangedEditError) throw new HttpError(400, err.message);
+      throw err;
+    }
+    return this.view(parsed, this.store.updateArrangement(id, { ...a, notes }));
   }
 
   duplicateArrangement(id: string, name?: string): ArrangementView {
@@ -192,6 +233,7 @@ export class Library {
       name: name?.trim() || `${source.name} (copy)`,
       songMap: source.songMap,
       performanceKey: source.performanceKey,
+      notes: source.notes,
     });
     return this.view(parsed, record);
   }
@@ -201,7 +243,8 @@ export class Library {
     const current = this.getArrangement(id);
     const parsed = parseChordPro(this.getSong(current.songId).sourceText);
     const songMap = parsed.sections.length ? formatSongMap(parsed, sourceOrderArrangement(parsed)) : "";
-    return this.view(parsed, this.store.updateArrangement(id, { ...current, songMap }));
+    // A rebuilt map has new items, so notes anchored to the old ones are cleared.
+    return this.view(parsed, this.store.updateArrangement(id, { ...current, songMap, notes: [] }));
   }
 
   deleteArrangement(id: string): void {
@@ -232,13 +275,18 @@ export class Library {
 
   private validateSetlistItems(items: unknown): SetlistItem[] {
     if (!Array.isArray(items)) throw new HttpError(400, "Setlist items must be a list");
+    const seen = new Set<string>();
     return items.map((raw) => {
       const item = raw as Partial<SetlistItem>;
       const arrangement = this.getArrangement(required(item.arrangementId, "Setlist item arrangementId"));
       if (arrangement.songId !== item.songId) {
         throw new HttpError(400, `Arrangement ${arrangement.id} does not belong to song ${item.songId}`);
       }
+      // Keep the client's id so an entry stays the same entry across edits; mint one for new or duplicated entries.
+      const itemId = typeof item.itemId === "string" && item.itemId && !seen.has(item.itemId) ? item.itemId : randomUUID();
+      seen.add(itemId);
       return {
+        itemId,
         songId: arrangement.songId,
         arrangementId: arrangement.id,
         ...(item.performanceKey && { performanceKey: item.performanceKey }),
@@ -256,6 +304,14 @@ export class Library {
     }
   }
 
+  private resolveOrFail(parsed: ParsedSong, a: ArrangementRecord): ArrangementItem[] {
+    try {
+      return resolveSongMap(parsed, a.songMap);
+    } catch (err) {
+      throw new HttpError(409, `Arrangement "${a.name}" no longer matches the song: ${(err as Error).message}`);
+    }
+  }
+
   private view(parsed: ParsedSong, record: ArrangementRecord): ArrangementView {
     try {
       return { ...record, items: resolveSongMap(parsed, record.songMap), error: null };
@@ -263,4 +319,17 @@ export class Library {
       return { ...record, items: null, error: (err as Error).message };
     }
   }
+}
+
+/** Check notes sent by a client: whole numbers for positions, and comment lines only. */
+function validateNotes(raw: unknown): ArrangementNote[] {
+  if (!Array.isArray(raw)) throw new HttpError(400, "notes must be a list");
+  return raw.map((n: Partial<ArrangementNote>) => {
+    const whole = (v: unknown) => typeof v === "number" && Number.isInteger(v) && v >= 0;
+    if (!n || !whole(n.item) || !whole(n.repetition) || !whole(n.afterLine) || typeof n.sectionId !== "string" || typeof n.text !== "string") {
+      throw new HttpError(400, "Each note needs item, repetition, afterLine, sectionId and text");
+    }
+    if (!isNoteLine(n.text)) throw new HttpError(400, `Only comment lines can be arrangement notes: "${n.text}"`);
+    return { item: n.item!, repetition: n.repetition!, sectionId: n.sectionId, afterLine: n.afterLine!, text: n.text };
+  });
 }

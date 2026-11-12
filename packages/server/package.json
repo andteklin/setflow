@@ -21,7 +21,8 @@
     "typescript": "^7.0.2"
   },
   "exports": {
-    "./protocol": "./src/protocol.ts"
+    "./protocol": "./src/protocol.ts",
+    "./app": "./src/app.ts"
   },
   "optionalDependencies": {
     "@julusian/midi": "^3.8.1"
