@@ -931,6 +931,137 @@ body[data-view="stage"] {
   text-align: center;
 }
 
+/*
+ * Stage body: the current section and, in portrait, the next section below it.
+ * In landscape (issue #14) the next section moves to a column on the right.
+ */
+.stage-body {
+  flex: 1;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: minmax(0, 1fr) auto;
+  gap: 1vh;
+}
+
+.stage-main {
+  min-height: 0;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 1vh;
+}
+
+@media (orientation: landscape) {
+  .stage-body {
+    grid-template-columns: minmax(0, 1fr) minmax(14rem, 28%);
+    grid-template-rows: minmax(0, 1fr);
+    gap: 2vw;
+  }
+
+  .stage-next {
+    border-top: none;
+    border-left: 2px solid #333;
+    padding: 0 0 0 1.5vw;
+    font-size: 3.6vh;
+    overflow: hidden;
+  }
+
+  .stage-next.ended {
+    align-self: center;
+  }
+
+  .stage-next-preview {
+    font-size: 3vh;
+    margin-top: 1.5vh;
+  }
+
+  .stage-next-preview .chart-line + .chart-line {
+    margin-top: 0.5vh;
+  }
+}
+
+/* Song map: section bubbles that follow the song, MultiTracks style. */
+.section-map {
+  position: relative;
+  overflow-x: auto;
+  overflow-y: hidden;
+  scrollbar-width: none;
+  /* Fade the edges so it reads as a strip that continues. */
+  mask-image: linear-gradient(to right, transparent, #000 2%, #000 94%, transparent);
+  padding: 0.6vh 0;
+}
+
+.section-map::-webkit-scrollbar {
+  display: none;
+}
+
+.section-map-track {
+  display: flex;
+  gap: 0.6vh;
+  margin: 0;
+  padding: 0 1vw;
+  list-style: none;
+  width: max-content;
+}
+
+.map-bubble {
+  --bubble: #6b6f78;
+  position: relative;
+  display: inline-flex;
+  align-items: baseline;
+  gap: 0.15em;
+  min-width: 2.4em;
+  justify-content: center;
+  padding: 0.25em 0.7em;
+  border-radius: 999px;
+  border: 2px solid var(--bubble);
+  color: var(--bubble);
+  font-size: 2.6vh;
+  font-weight: 800;
+  line-height: 1.1;
+  white-space: nowrap;
+  transition: background-color 0.2s, color 0.2s, opacity 0.2s, transform 0.2s;
+}
+
+.map-bubble .pass {
+  font-size: 0.6em;
+  font-weight: 700;
+  opacity: 0.85;
+}
+
+.map-bubble.family-verse { --bubble: #4a90d9; }
+.map-bubble.family-chorus { --bubble: #e2a400; }
+.map-bubble.family-pre { --bubble: #e8743b; }
+.map-bubble.family-bridge { --bubble: #a35bd6; }
+.map-bubble.family-inst { --bubble: #3aa57a; }
+.map-bubble.family-custom { --bubble: #8d9096; }
+
+/* Added live (REPEAT, JUMP): dashed, so the band sees it was not in the plan. */
+.map-bubble.live {
+  border-style: dashed;
+}
+
+.map-bubble.played {
+  opacity: 0.35;
+}
+
+.map-bubble.next {
+  box-shadow: 0 0 0 2px var(--bubble) inset;
+}
+
+.map-bubble.current {
+  background: var(--bubble);
+  color: #000;
+  transform: scale(1.12);
+  box-shadow: 0 0 0.8em color-mix(in srgb, var(--bubble) 60%, transparent);
+}
+
+.map-bubble.vamping::after {
+  content: "↻";
+  margin-left: 0.2em;
+}
+
 /* Musician View */
 
 .musician-bar {

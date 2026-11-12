@@ -78,11 +78,11 @@ export function livePanel(live: LiveClient, getTarget: () => StartTarget | null,
     const state = live.current.status?.state;
     const type = SHORTCUTS[e.key] ?? SHORTCUTS[e.key.toLowerCase()];
     if (!state) return;
-    // After a song ends, only NEXT does anything: it loads the next setlist song (issue #7).
+    // After a song ends, NEXT loads the next setlist song (issue #7) and PREVIOUS reopens this one (issue #12).
     if (state.status === "ended") {
-      if (type === "NEXT" && serviceView(live.current.status).nextSong) {
+      if ((type === "NEXT" && serviceView(live.current.status).nextSong) || type === "PREVIOUS") {
         e.preventDefault();
-        void send({ type: "NEXT" });
+        void send({ type });
       }
       return;
     }
@@ -289,16 +289,15 @@ export function livePanel(live: LiveClient, getTarget: () => StartTarget | null,
               { class: "now" },
               h("div", { class: "now-section" }, "ENDED"),
               h("p", { class: "muted" }, status?.title ?? ""),
-              where.nextSong
-                ? [
-                    h("div", { class: "now-next" }, "Next song: ", h("strong", null, where.nextSong)),
-                    h(
-                      "div",
-                      { class: "transport" },
-                      h("button", { class: "primary next", disabled: !conducting, onclick: () => void send({ type: "NEXT" }), title: "→, Space or Page Down" }, "NEXT SONG ▶"),
-                    ),
-                  ]
-                : null,
+              where.nextSong ? h("div", { class: "now-next" }, "Next song: ", h("strong", null, where.nextSong)) : null,
+              h(
+                "div",
+                { class: "transport" },
+                h("button", { disabled: !conducting, onclick: () => void send({ type: "PREVIOUS" }), title: "← or Page Up: reopen the song where it ended" }, "◀ BACK"),
+                where.nextSong
+                  ? h("button", { class: "primary next", disabled: !conducting, onclick: () => void send({ type: "NEXT" }), title: "→, Space or Page Down" }, "NEXT SONG ▶")
+                  : null,
+              ),
             )
           : null;
 

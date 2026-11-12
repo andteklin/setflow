@@ -25,7 +25,8 @@ On the LAN: http://192.168.0.126:5280  (Stage: /#/stage, Musician: /#/musician)
 
 - **Control** — open on the MD's computer. Import a ChordPro chart, build a
   Song Map, then start the song and conduct.
-- **Stage** — open full-screen on the portrait band display.
+- **Stage** — open full-screen on the band display, portrait or landscape. A
+  song map of section bubbles runs across the top and follows the song.
 - **Musician** — open on each musician's phone or tablet using the LAN address.
 
 The library is stored in `~/.setflow/setflow.db` (SQLite). Set `SETFLOW_DATA`
@@ -37,7 +38,7 @@ restarts mid-song, Control View offers to resume where the band was.
 | Key | Action |
 | --- | --- |
 | → , Space, Page Down | NEXT (starts the song from Ready) |
-| ← , Page Up | PREVIOUS |
+| ← , Page Up | PREVIOUS (after a song ends: reopen it where it ended) |
 | R | REPEAT the current section |
 | V | VAMP — hold until cue |
 | 1 … 0 | JUMP to that section (numbers shown on the jump buttons) |
