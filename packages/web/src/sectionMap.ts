@@ -74,6 +74,14 @@ export function sectionMap() {
       occ.repetitionCount > 1 ? h("span", { class: "pass" }, String(occ.repetitionIndex + 1)) : null,
     );
 
+  // Fade an edge only while more bubbles lie beyond it (issue #17); at the start and end the strip is crisp.
+  const updateFades = () => {
+    const max = el.scrollWidth - el.clientWidth;
+    el.classList.toggle("fade-start", el.scrollLeft > 2);
+    el.classList.toggle("fade-end", el.scrollLeft < max - 2);
+  };
+  el.addEventListener("scroll", updateFades, { passive: true });
+
   const scrollTo = (id: string | null, smooth: boolean) => {
     const target = id ? track.querySelector<HTMLElement>(`[data-id="${CSS.escape(id)}"]`) : null;
     const reduce = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
@@ -81,6 +89,7 @@ export function sectionMap() {
       left: target ? scrollTarget(target.offsetLeft, el.clientWidth, el.scrollWidth) : 0,
       behavior: smooth && !reduce ? "smooth" : "auto",
     });
+    updateFades();
   };
 
   /** Show `state`. Bubbles are rebuilt only when the sequence changes, so scrolling stays smooth. */

@@ -26,7 +26,9 @@ On the LAN: http://192.168.0.126:5280  (Stage: /#/stage, Musician: /#/musician)
 - **Control** — open on the MD's computer. Import a ChordPro chart, build a
   Song Map, then start the song and conduct.
 - **Stage** — open full-screen on the band display, portrait or landscape. A
-  song map of section bubbles runs across the top and follows the song.
+  song map of section bubbles runs across the top and follows the song. Move
+  the mouse (or tap) to choose **Lyrics + chords** or **Lyrics only** for that
+  screen, or open `#/stage?display=lyrics` to fix it.
 - **Musician** — open on each musician's phone or tablet using the LAN address.
 
 The library is stored in `~/.setflow/setflow.db` (SQLite). Set `SETFLOW_DATA`
