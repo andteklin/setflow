@@ -31,6 +31,12 @@ export interface PerformanceState {
   /** The effective session sequence: the plan plus live insertions. */
   sequence: readonly SectionOccurrence[];
   currentOccurrenceId: string | null;
+  /**
+   * Once ended, the occurrence the band was on when it ended, so PREVIOUS can
+   * reopen the song there (issue #12). Null otherwise, and in snapshots saved
+   * before this existed.
+   */
+  endedFromOccurrenceId?: string | null;
   /** While vamping, the occurrence NEXT exits to. */
   nextOccurrenceId: string | null;
   vamping: boolean;
@@ -64,6 +70,7 @@ export function createPerformance(init: PerformanceInit): PerformanceState {
     plannedSequence,
     sequence: plannedSequence,
     currentOccurrenceId: null,
+    endedFromOccurrenceId: null,
     vamping: false,
     cues: Object.freeze([...(init.cues ?? [])]),
     liveDeviations: [],
@@ -109,7 +116,27 @@ export function applyCommand(
   ctx: TransitionContext,
 ): TransitionResult {
   if (state.status === "ended") {
-    return reject("The performance has ended; start a new session to play again");
+    // The one way back from the end: PREVIOUS reopens the song where it ended (issue #12),
+    // e.g. after a NEXT too many or an accidental END. Everything else waits for a new session.
+    if (command.type !== "PREVIOUS") return reject("The performance has ended; start a new session to play again");
+    // Ended before any section was played: going back means Ready again.
+    const back = state.sequence.find((o) => o.id === state.endedFromOccurrenceId) ?? null;
+    const revision = state.revision + 1;
+    return {
+      ok: true,
+      changed: true,
+      state: derive({
+        ...state,
+        revision,
+        status: back ? "active" : "ready",
+        currentOccurrenceId: back?.id ?? null,
+        endedFromOccurrenceId: null,
+        liveDeviations: [
+          ...state.liveDeviations,
+          { revision, commandId: ctx.commandId, command, fromOccurrenceId: null, toOccurrenceId: back?.id ?? null },
+        ],
+      }),
+    };
   }
   const pos = state.sequence.findIndex((o) => o.id === state.currentOccurrenceId);
   const revision = state.revision + 1;
@@ -214,6 +241,7 @@ const ended = (state: PerformanceState): Draft => ({
   ...state,
   status: "ended",
   currentOccurrenceId: null,
+  endedFromOccurrenceId: state.currentOccurrenceId,
   vamping: false,
 });
 

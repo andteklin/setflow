@@ -202,6 +202,31 @@ describe("command semantics (spec §19.2)", () => {
     assert.equal(rejectedFor(send({ type: "JUMP", sectionId: id("I") })), "invalid-command");
   });
 
+  it("goes back from the end to the section it ended on (issue #12)", () => {
+    // A NEXT too many on the last section.
+    const { send } = startSession("V1,E");
+    accepted(send({ type: "NEXT" }));
+    accepted(send({ type: "NEXT" }));
+    assert.equal(accepted(send({ type: "NEXT" })).status, "ended");
+    let state = accepted(send({ type: "PREVIOUS" }));
+    assert.deepEqual(display(state), { status: "active", current: "Ending", next: null, vamping: false });
+    assert.equal(accepted(send({ type: "NEXT" })).status, "ended", "and it can end again");
+
+    // An accidental END mid-song reopens where the band was, not at the last section.
+    const second = startSession("V1,B,E");
+    second.send({ type: "NEXT" });
+    second.send({ type: "NEXT" });
+    accepted(second.send({ type: "END" }));
+    state = accepted(second.send({ type: "PREVIOUS" }));
+    assert.deepEqual(display(state), { status: "active", current: "Bridge", next: "Ending", vamping: false });
+    assert.equal(state.liveDeviations.at(-1)?.command.type, "PREVIOUS");
+
+    // Ended before anything was played: back to Ready.
+    const third = startSession("V1");
+    accepted(third.send({ type: "END" }));
+    assert.equal(accepted(third.send({ type: "PREVIOUS" })).status, "ready");
+  });
+
   it("keeps repetition counters to the contiguous run after a live insertion", () => {
     const { send } = startSession("B*2,E");
     accepted(send({ type: "NEXT" }));

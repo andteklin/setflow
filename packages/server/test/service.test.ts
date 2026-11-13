@@ -194,6 +194,20 @@ describe("performing a setlist (issue #7)", () => {
     assert.equal((await host.ok<LiveStatus>("GET", "/api/session")).title, "Second Wind (Example)");
   });
 
+  it("lets a clicker go back after the last song ends, without the MD restarting it (issue #12)", async () => {
+    await host.ok("POST", "/api/service/song", { controllerId: MD, index: 1 });
+    for (let i = 0; i < 3; i++) assert.equal(host.app.live.conduct({ type: "NEXT" }, "keyboard"), null);
+    assert.equal(host.app.live.status().state?.status, "ended");
+    assert.equal(host.app.store.loadRecovery(), undefined, "a finished setlist leaves nothing to recover");
+
+    // The same path a paired Stage clicker uses.
+    assert.equal(host.app.live.conduct({ type: "PREVIOUS" }, "keyboard"), null);
+    const status = host.app.live.status();
+    assert.equal(status.state?.status, "active");
+    assert.equal(status.service?.index, 1, "still the last song, reopened at its last section");
+    assert.ok(host.app.store.loadRecovery(), "a reopened song is recoverable again");
+  });
+
   it("leaves setlist mode when a single song is started on its own", async () => {
     const solo = await host.ok<LiveStatus>("POST", "/api/session/start", { songId: a.song.id, arrangementId: a.arrangements[0].id, controllerId: MD });
     assert.equal(solo.service, null);

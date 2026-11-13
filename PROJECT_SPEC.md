@@ -958,7 +958,7 @@ The MD issues transitions at the intended musical boundary. MVP commands act imm
 | `VAMP` | Hold the current section indefinitely until `NEXT`, `JUMP`, `PREVIOUS`, or `END`. Repeated `VAMP` is idempotent; `REPEAT` explicitly counts another iteration. Show `VAMP — UNTIL CUE`, with the exit successor separately labeled. |
 | `END` | Mark ended, clear current/next and vamp state, and show `ENDED` on all views. It does not jump to a section named Ending; use `JUMP` for that. |
 
-`REPEAT`, `VAMP`, and `PREVIOUS` require an active current occurrence. A valid `JUMP` from ready starts performance at its target. After ending, transport commands do not restart the song; the operator explicitly starts a new session.
+`REPEAT`, `VAMP`, and `PREVIOUS` require an active current occurrence. A valid `JUMP` from ready starts performance at its target. After ending, transport commands do not restart the song; the operator explicitly starts a new session. The one exception is `PREVIOUS`, which reopens the song at the occurrence it ended from: the last section after a `NEXT` too many, or wherever an accidental `END` was pressed. A song ended from ready returns to ready. Any input that may send `PREVIOUS` can do this, including a paired Stage clicker, so the band is not stuck waiting for the MD to restart the song. It is recorded as a live deviation like any other `PREVIOUS`.
 
 **Setlist performance.** A setlist can be performed as one service. Starting it validates every entry and pins each song's source, map and key at that moment. A broken entry prevents the start and is named, so the problem surfaces before the service. Library edits during the service never change what is played. Two transitions then move between songs, and each starts a new session for the new song:
 
@@ -1066,7 +1066,13 @@ Example:
 
 Stage View prioritizes readability rather than reproducing the exact source-file layout.
 
-Below the next section's label, Stage View previews its first two lines (chords and lyrics) at a fixed smaller size. The band can then see what is coming without the preview competing with the current chart. During a setlist, Stage View shows the song's position ("SONG 2 OF 5"). It shows the next song's title at the last section and after a song ends.
+**Layout follows the display.** Portrait remains the primary target. A landscape window, wider than tall, puts the next section in a column to the right of the current chart. A portrait window puts it below. The layout switches as soon as the window changes shape.
+
+**The chart fills the display.** The current section's chart is sized as large as its area allows in both directions. Short sections grow and long ones shrink, down to a readable minimum. Each source line stays whole.
+
+**Song map.** A strip of section bubbles across the top shows the effective live sequence, with one bubble per occurrence (`I V1 PC C1A … B¹ B² B³ … E`). Bubbles are coloured by section family, and a repeated run carries its pass number. Played sections dim, the current one is filled, and the next is outlined. A vamp is marked ↻, and occurrences inserted live are dashed. The strip scrolls smoothly from left to right as the song advances, keeping the current bubble about a third of the way across. This is only a view of band state; it is not a control.
+
+Below the next section's label, Stage View previews its opening lines (chords and lyrics) at a fixed smaller size: two lines below the chart in portrait, up to six in the landscape side column. The band can then see what is coming without the preview competing with the current chart. During a setlist, Stage View shows the song's position ("SONG 2 OF 5"). It shows the next song's title at the last section and after a song ends.
 
 ---
 

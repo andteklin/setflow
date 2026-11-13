@@ -1,6 +1,7 @@
 import { semitoneDistance, transposeChartLine, type ChartLine, type PerformanceState, type SectionOccurrence } from "@setflow/core";
 import type { LiveStatus, SessionContent } from "@setflow/server/protocol";
 import { h } from "./dom";
+import { largestFit } from "./fit";
 
 export type ContentSection = SessionContent["sections"][number];
 
@@ -145,14 +146,15 @@ export function previewLines(lines: readonly ChartLine[], count: number): ChartL
   return lines.filter((l) => l.kind === "music" || l.kind === "comment").slice(0, count);
 }
 
-/** Shrink an element's font until its content fits both ways, for fixed-size stage displays. */
+/**
+ * Size an element's font as large as its box allows, both ways, for
+ * fixed-size stage displays (issue #13): short sections grow to fill the
+ * screen, long ones shrink, never below `minPx`.
+ */
 export function fitText(container: HTMLElement, maxPx: number, minPx: number): void {
-  let size = maxPx;
+  const size = largestFit(minPx, maxPx, (px) => {
+    container.style.fontSize = `${px}px`;
+    return container.scrollHeight <= container.clientHeight + 1 && container.scrollWidth <= container.clientWidth + 1;
+  });
   container.style.fontSize = `${size}px`;
-  const overflows = () =>
-    container.scrollHeight > container.clientHeight + 1 || container.scrollWidth > container.clientWidth + 1;
-  while (size > minPx && overflows()) {
-    size = Math.max(minPx, Math.floor(size * 0.93));
-    container.style.fontSize = `${size}px`;
-  }
 }
