@@ -312,6 +312,12 @@ textarea {
   flex-direction: column;
 }
 
+/* A whole word: its chord pieces never separate when a line wraps (issue #16). */
+.word {
+  display: inline-flex;
+  align-items: flex-end;
+}
+
 .chord {
   color: var(--chord);
   font-weight: 700;
@@ -889,14 +895,33 @@ body[data-view="stage"] {
   min-height: 0;
 }
 
-/* Keep each source line whole on stage; fitText shrinks the font instead of wrapping. */
+/*
+ * Lines wrap between words (issue #16), so fitText can grow the text to fill
+ * the screen. A wrapped continuation is indented, so each source line still
+ * reads as one phrase.
+ */
 .stage-chart .chart-line {
-  flex-wrap: nowrap;
-  white-space: nowrap;
+  padding-left: 1.1em;
+}
+
+.stage-chart .chart-line > :first-child {
+  margin-left: -1.1em;
 }
 
 .stage-chart .chart-line.lyrics-only {
-  white-space: pre;
+  text-indent: -1.1em;
+  white-space: pre-wrap;
+}
+
+/* Lyrics-only screens (issue #18): a little more air between lines, since there are no chord rows. */
+.stage-chart .lyrics-mode .chart-line {
+  margin: 0.25em 0;
+}
+
+.stage-chart .instrumental {
+  font-style: normal;
+  text-align: center;
+  margin-top: 1em;
 }
 
 .stage-next {
@@ -908,17 +933,25 @@ body[data-view="stage"] {
 
 /* A fixed, smaller size so the preview never competes with the current chart's fitText. */
 .stage-next-preview {
-  font-size: 2.6vh;
+  font-size: 3.3vh;
   font-weight: 500;
   color: var(--muted);
   margin-top: 0.4vh;
   overflow: hidden;
 }
 
+/* The next two lines, wrapped between words so nothing runs off screen, with wrapped rows indented. */
 .stage-next-preview .chart-line {
-  flex-wrap: nowrap;
-  white-space: nowrap;
-  overflow: hidden;
+  padding-left: 1.1em;
+}
+
+.stage-next-preview .chart-line > :first-child {
+  margin-left: -1.1em;
+}
+
+.stage-next-preview .chart-line.lyrics-only {
+  text-indent: -1.1em;
+  white-space: pre-wrap;
 }
 
 .stage-next-preview .chord {
@@ -972,7 +1005,7 @@ body[data-view="stage"] {
   }
 
   .stage-next-preview {
-    font-size: 3vh;
+    font-size: 3.9vh;
     margin-top: 1.5vh;
   }
 
@@ -987,8 +1020,10 @@ body[data-view="stage"] {
   overflow-x: auto;
   overflow-y: hidden;
   scrollbar-width: none;
-  /* Fade the edges so it reads as a strip that continues. */
-  mask-image: linear-gradient(to right, transparent, #000 2%, #000 94%, transparent);
+  /* Fade an edge only while more bubbles lie past it (set from sectionMap.ts). */
+  --fade-start: 0px;
+  --fade-end: 0px;
+  mask-image: linear-gradient(to right, transparent 0, #000 var(--fade-start), #000 calc(100% - var(--fade-end)), transparent 100%);
   padding: 0.6vh 0;
 }
 
@@ -1000,9 +1035,18 @@ body[data-view="stage"] {
   display: flex;
   gap: 0.6vh;
   margin: 0;
-  padding: 0 1vw;
+  /* Room at both ends so the first and last bubbles never sit against the screen edge (issue #17). */
+  padding: 0 4vw;
   list-style: none;
   width: max-content;
+}
+
+.section-map.fade-start {
+  --fade-start: 5vw;
+}
+
+.section-map.fade-end {
+  --fade-end: 5vw;
 }
 
 .map-bubble {
@@ -1223,6 +1267,39 @@ details.midi select {
 .stage-input.pinned {
   opacity: 0.85;
   pointer-events: auto;
+}
+
+.stage-input {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 0.6vh;
+}
+
+/* The display-mode choice only shows with the rest of the panel, on mouse move or tap. */
+.stage-input:not(.reveal) .stage-display-mode {
+  display: none;
+}
+
+.stage-display-mode {
+  display: inline-flex;
+  border: 1px solid #444;
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.stage-display-mode button {
+  border: none;
+  border-radius: 0;
+  background: #111;
+  color: var(--muted);
+  font-size: 1.6vh;
+  padding: 0.4em 0.8em;
+}
+
+.stage-display-mode button.active {
+  background: #2f2f2f;
+  color: var(--text);
 }
 
 /* A Song Map row that carries arrangement-only comments (issue #9). */

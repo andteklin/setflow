@@ -22,7 +22,8 @@ function route() {
   dispose = null;
   live = null;
 
-  const role = location.hash.replace(/^#\/?/, "") as ClientRole;
+  // Options may follow the view, e.g. #/stage?display=lyrics.
+  const role = location.hash.replace(/^#\/?/, "").split("?")[0] as ClientRole;
   if (role in views) {
     document.title = `SetFlow — ${role[0].toUpperCase()}${role.slice(1)}`;
     live = new LiveClient(role);

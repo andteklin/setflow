@@ -1,11 +1,11 @@
-import { fitText, liveView, occurrenceLines, occurrenceText, previewLines, renderLines, serviceView } from "../chart";
+import { fitText, liveView, occurrenceLines, occurrenceText, previewLines, renderLines, serviceView, type DisplayMode } from "../chart";
 import { api, clientId } from "../api";
-import { h, mount } from "../dom";
+import { h, load, mount, save } from "../dom";
 import type { LiveClient, LiveSnapshot } from "../live";
 import { sectionMap } from "../sectionMap";
 
-/** How many lines of the next section to preview: below the chart in portrait, beside it in landscape (issue #14). */
-const PREVIEW_LINES = { portrait: 2, landscape: 6 };
+/** The next section's opening lines to preview, wrapped: below the chart in portrait, beside it in landscape (issue #14). */
+const PREVIEW_LINES = 2;
 
 /** Keys a presentation clicker sends: forward and back. Anything else (blackout, F5) is ignored. */
 const CLICKER_KEYS: Record<string, "NEXT" | "PREVIOUS"> = {
@@ -18,8 +18,9 @@ const CLICKER_KEYS: Record<string, "NEXT" | "PREVIOUS"> = {
   PageUp: "PREVIOUS",
 };
 
-/** True when the window is wider than tall. The CSS uses the same media query for the layout. */
-const isLandscape = () => window.matchMedia("(orientation: landscape)").matches;
+interface StagePrefs {
+  display: DisplayMode;
+}
 
 /**
  * Band display (spec §21): song map, current section, exact variant,
@@ -33,6 +34,18 @@ const isLandscape = () => window.matchMedia("(orientation: landscape)").matches;
  */
 export function stageView(root: HTMLElement, live: LiveClient): () => void {
   document.body.dataset.view = "stage";
+  // Each Stage screen chooses what it shows (issue #18): e.g. lyrics for the singers' monitor, chords for the band's.
+  const prefs = load<StagePrefs>("setflow.stage", { display: "chords" });
+  const fromUrl = new URLSearchParams(location.hash.split("?")[1] ?? "").get("display");
+  if (fromUrl === "chords" || fromUrl === "lyrics") {
+    prefs.display = fromUrl;
+    save("setflow.stage", prefs);
+  }
+  const setDisplay = (display: DisplayMode) => {
+    prefs.display = display;
+    save("setflow.stage", prefs);
+    render(live.current);
+  };
   // These stay in place across renders; only their contents change, so the map keeps its scroll position.
   const top = h("header", { class: "stage-top" });
   const map = sectionMap();
@@ -70,13 +83,18 @@ export function stageView(root: HTMLElement, live: LiveClient): () => void {
     clearTimeout(revealTimer);
     revealTimer = window.setTimeout(() => corner.classList.remove("reveal"), 4000);
   };
+  // Touch screens have no hover: a tap reveals it too.
   window.addEventListener("mousemove", onMouse);
+  window.addEventListener("pointerdown", onMouse);
 
   const renderCorner = (snap: LiveSnapshot) => {
     const pending = snap.inputs?.pending.some((r) => r.clientId === clientId) ?? false;
     corner.classList.toggle("pinned", pending || note !== "");
+    const option = (display: DisplayMode, label: string) =>
+      h("button", { class: prefs.display === display ? "active" : "", "aria-pressed": String(prefs.display === display), onclick: () => setDisplay(display) }, label);
     mount(
       corner,
+      h("div", { class: "stage-display-mode", role: "group", "aria-label": "Show" }, option("chords", "Lyrics + chords"), option("lyrics", "Lyrics only")),
       note
         ? h("span", null, note)
         : live.isConductor
@@ -101,7 +119,6 @@ export function stageView(root: HTMLElement, live: LiveClient): () => void {
     const state = snap.status?.state ?? null;
     const view = liveView(state, snap.content);
     const service = serviceView(snap.status);
-    const landscape = isLandscape();
     map.update(state, snap.content);
 
     mount(
@@ -120,7 +137,7 @@ export function stageView(root: HTMLElement, live: LiveClient): () => void {
       ? h(
           "div",
           { class: "stage-next-preview" },
-          renderLines(previewLines(occurrenceLines(snap.content, view.next.occ, view.next.section), landscape ? PREVIEW_LINES.landscape : PREVIEW_LINES.portrait), view.semitones),
+          renderLines(previewLines(occurrenceLines(snap.content, view.next.occ, view.next.section), PREVIEW_LINES), view.semitones, { mode: prefs.display }),
         )
       : null;
     const nextSong = service.nextSong ? h("div", null, h("span", { class: "muted" }, "NEXT SONG: "), service.nextSong.toUpperCase()) : null;
@@ -143,7 +160,7 @@ export function stageView(root: HTMLElement, live: LiveClient): () => void {
         h("span", null, view.current?.section.sourceLabel.toUpperCase() ?? ""),
         view.repetition && !view.vamping ? h("span", { class: "stage-rep" }, view.repetition) : null,
       );
-      if (view.current) chart.append(renderLines(occurrenceLines(snap.content, view.current.occ, view.current.section), view.semitones));
+      if (view.current) chart.append(renderLines(occurrenceLines(snap.content, view.current.occ, view.current.section), view.semitones, { mode: prefs.display }));
     }
 
     mount(
@@ -174,6 +191,7 @@ export function stageView(root: HTMLElement, live: LiveClient): () => void {
     window.removeEventListener("resize", onResize);
     window.removeEventListener("keydown", onKey);
     window.removeEventListener("mousemove", onMouse);
+    window.removeEventListener("pointerdown", onMouse);
     clearTimeout(noteTimer);
     clearTimeout(revealTimer);
   };
