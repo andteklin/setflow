@@ -1316,3 +1316,38 @@ details.midi select {
   padding: 0;
   margin: 0.3rem 0;
 }
+
+.stage-navigation {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 16px;
+  padding: 12px;
+}
+
+.stage-navigation button {
+  background: #252525;
+  color: #fff;
+  border: 1px solid #555;
+  border-radius: 8px;
+  padding: 12px 28px;
+  font-size: 1rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s;
+}
+
+.stage-navigation button:hover:not(:disabled) {
+  background: #444;
+  border-color: #888;
+}
+
+.stage-navigation button:active:not(:disabled) {
+  background: #555;
+}
+
+.stage-navigation button:disabled {
+  opacity: 0.3;
+  cursor: not-allowed;
+}
