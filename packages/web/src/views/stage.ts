@@ -52,13 +52,6 @@ export function stageView(root: HTMLElement, live: LiveClient): () => void {
     render(live.current);
   };
 
-  const top = h("header", { class: "stage-top" });
-  const map = sectionMap();
-  const body = h("div", { class: "stage-body" });
-  const screen = h("div", { class: "stage" }, top, map.el, body);
-  const corner = h("div", { class: "stage-input" });
-
-  mount(root, screen, corner);
 
   let note = "";
   let noteTimer = 0;
@@ -122,8 +115,43 @@ export function stageView(root: HTMLElement, live: LiveClient): () => void {
     render(snap);
   };
 
+  
+
   const previousVerse = () => navigateOccurrence(-1);
   const nextVerse = () => navigateOccurrence(1);
+
+  const touchNavigation = h(
+    "div",
+    { class: "stage-touch-navigation" },
+    h("div", {
+      class: "stage-touch-zone previous",
+      role: "button",
+      "aria-label": "Previous verse",
+      onclick: previousVerse,
+    }),
+    h("div", {
+      class: "stage-touch-zone next",
+      role: "button",
+      "aria-label": "Next verse",
+      onclick: nextVerse,
+    }),
+  );
+
+  const top = h("header", { class: "stage-top" });
+  const map = sectionMap();
+  const body = h("div", { class: "stage-body" });
+  const corner = h("div", { class: "stage-input" });
+  const screen = h(
+    "div",
+    { class: "stage" },
+    top,
+    map.el,
+    body,
+    touchNavigation,
+  );
+
+  mount(root, screen, corner);
+
 
   const onKey = (e: KeyboardEvent) => {
     const type = CLICKER_KEYS[e.key];
