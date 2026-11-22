@@ -476,7 +476,7 @@ export function controlView(root: HTMLElement, live: LiveClient): () => void {
       );
       mount(
         editor,
-        h("h4", null, "Available sections ", h("span", { class: "muted small" }, "click to add at the end, or drag into place")),
+        h("h4", null, "Available sections ", h("span", { class: "muted small" }, "(click to add at the end)")),
         h(
           "div",
           { class: "palette" },
@@ -494,7 +494,7 @@ export function controlView(root: HTMLElement, live: LiveClient): () => void {
             ),
           ),
         ),
-        h("h4", null, "Arrangement ", h("span", { class: "muted small" }, "drag to reorder")),
+        h("h4", null, "Arrangement ", h("span", { class: "muted small" }, "(drag to reorder)")),
         draft.length === 0 ? h("p", { class: "muted" }, "Empty — click or drag sections here.") : null,
         rows,
         h("label", { class: "stack" }, "Song map ", textInput, textError),
