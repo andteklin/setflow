@@ -120,22 +120,6 @@ export function stageView(root: HTMLElement, live: LiveClient): () => void {
   const previousVerse = () => navigateOccurrence(-1);
   const nextVerse = () => navigateOccurrence(1);
 
-  const touchNavigation = h(
-    "div",
-    { class: "stage-touch-navigation" },
-    h("div", {
-      class: "stage-touch-zone previous",
-      role: "button",
-      "aria-label": "Previous verse",
-      onclick: previousVerse,
-    }),
-    h("div", {
-      class: "stage-touch-zone next",
-      role: "button",
-      "aria-label": "Next verse",
-      onclick: nextVerse,
-    }),
-  );
 
   const top = h("header", { class: "stage-top" });
   const map = sectionMap();
@@ -146,8 +130,7 @@ export function stageView(root: HTMLElement, live: LiveClient): () => void {
     { class: "stage" },
     top,
     map.el,
-    body,
-    touchNavigation,
+    body
   );
 
   mount(root, screen, corner);
@@ -217,7 +200,7 @@ export function stageView(root: HTMLElement, live: LiveClient): () => void {
         : live.isConductor
           ? h("span", null, "Clicker: this browser is conducting")
           : live.isPairedInput
-            ? h("span", null, "Clicker on — approved by the MD")
+            ? h("span", null, "Clicker on - approved by the MD")
             : pending
               ? h("span", null, "Waiting for the MD to allow this clicker…")
               : h(
@@ -274,6 +257,26 @@ export function stageView(root: HTMLElement, live: LiveClient): () => void {
       ? sections.get(localOccurrence.sectionId)
       : undefined;
 
+    // Find the next occurrence relative to the musician's local position.
+    const songOccurrences = state?.sequence.filter((occ) =>
+      snap.content?.sections.some(
+        (section) => section.id === occ.sectionId,
+      ),
+    ) ?? [];
+
+    const localIndex = songOccurrences.findIndex(
+      (occ) => occ.id === localOccurrenceId,
+    );
+
+    const localNextOccurrence =
+      localIndex >= 0
+        ? songOccurrences[localIndex + 1]
+        : undefined;
+
+    const localNextSection = localNextOccurrence
+      ? sections.get(localNextOccurrence.sectionId)
+      : undefined;
+
     mount(
       top,
       h(
@@ -294,7 +297,7 @@ export function stageView(root: HTMLElement, live: LiveClient): () => void {
     );
 
     // Preview remains based on the controller's next occurrence.
-    const preview = view.next
+    const preview = localNextOccurrence && localNextSection
       ? h(
           "div",
           { class: "stage-next-preview" },
@@ -302,8 +305,8 @@ export function stageView(root: HTMLElement, live: LiveClient): () => void {
             previewLines(
               occurrenceLines(
                 snap.content,
-                view.next.occ,
-                view.next.section,
+                localNextOccurrence,
+                localNextSection,
               ),
               PREVIEW_LINES,
             ),
@@ -342,7 +345,7 @@ export function stageView(root: HTMLElement, live: LiveClient): () => void {
         ),
         preview,
       );
-    } else if (view.next) {
+    } else if (localNextOccurrence && localNextSection) {
       side = h(
         "aside",
         { class: "stage-next" },
@@ -354,7 +357,7 @@ export function stageView(root: HTMLElement, live: LiveClient): () => void {
             { class: "muted" },
             view.status === "ready" ? "FIRST: " : "NEXT: ",
           ),
-          occurrenceText(view.next.section, view.next.occ),
+          occurrenceText(localNextSection, localNextOccurrence),
         ),
         preview,
       );
@@ -383,14 +386,31 @@ export function stageView(root: HTMLElement, live: LiveClient): () => void {
     } else if (view.status === "ended") {
       heading = h("div", { class: "stage-current idle" }, "ENDED");
     } else {
-      heading = h(
-        "div",
-        { class: "stage-current" },
-        h("span", null, localSection?.sourceLabel.toUpperCase() ?? ""),
-        view.repetition && !view.vamping
-          ? h("span", { class: "stage-rep" }, view.repetition)
-          : null,
-      );
+      const localRepetition = localOccurrence
+  ? occurrenceText(localSection, localOccurrence)
+  : "";
+
+  const repetitionLabel =
+    localOccurrence && localOccurrence.repetitionCount > 1
+      ? `${localOccurrence.repetitionIndex + 1}/${localOccurrence.repetitionCount}`
+      : null;
+    heading = h(
+      "div",
+      { class: "stage-current" },
+      h("span", null, localSection?.sourceLabel.toUpperCase() ?? ""),
+      repetitionLabel && !view.vamping
+        ? h("span", { class: "stage-rep" }, repetitionLabel)
+        : null,
+    );
+
+  heading = h(
+    "div",
+    { class: "stage-current" },
+    h("span", null, localSection?.sourceLabel.toUpperCase() ?? ""),
+    repetitionLabel && !view.vamping
+      ? h("span", { class: "stage-rep" }, repetitionLabel)
+      : null,
+  );
 
       if (localOccurrence && localSection) {
         chart.append(

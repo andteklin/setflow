@@ -1321,44 +1321,6 @@ details.midi select {
   position: relative;
 }
 
-.stage-touch-navigation {
-  position: absolute;
-  inset: 0;
-  display: flex;
-  justify-content: space-between;
-  pointer-events: none;
-  z-index: 5;
-}
-
-.stage-touch-zone {
-  position: relative;
-  width: 25%;
-  height: 100%;
-  pointer-events: auto;
-  touch-action: manipulation;
-  -webkit-tap-highlight-color: transparent;
-  background: transparent;
-}
-
-/* Brief directional flash */
-.stage-touch-zone:active {
-  background: rgba(255, 255, 255, 0.12);
-}
-
-.stage-touch-zone.previous:active {
-  box-shadow: inset 8px 0 35px rgba(255, 255, 255, 0.12);
-}
-
-.stage-touch-zone.next:active {
-  box-shadow: inset -8px 0 35px rgba(255, 255, 255, 0.12);
-}
-
-@media (hover: none) {
-  .stage-touch-zone {
-    user-select: none;
-    -webkit-user-select: none;
-  }
-}
 
 
 .stage-navigation {
