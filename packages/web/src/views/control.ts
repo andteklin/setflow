@@ -3,12 +3,13 @@ import type {
   ArrangementView,
   HostInfo,
   ImportPreview,
+  LiveStatus,
   SetlistItem,
   SetlistRecord,
   SongDetail,
   SongSummary,
 } from "@setflow/server/protocol";
-import { api } from "../api";
+import { api, clientId } from "../api";
 import { h, load, mount, save } from "../dom";
 import { insertAt, isNoOpMove, moveTo, trackDrag } from "../drag";
 import type { LiveClient } from "../live";
@@ -551,6 +552,8 @@ export function controlView(root: HTMLElement, live: LiveClient): () => void {
     return view;
   }
 
+
+
   async function saveMap() {
     const a = arrangement();
     if (!a) return;
@@ -559,11 +562,99 @@ export function controlView(root: HTMLElement, live: LiveClient): () => void {
     const notes = draft.flatMap((d, item) => d.notes.filter((n) => n.repetition < d.repetitions).map((n) => ({ ...n, item })));
     try {
       await api("PUT", `/api/arrangements/${a.id}`, { songMap, notes, performanceKey: draftKey || null, expectedRevision: a.revision });
+
+      const hasActivePerformance =
+        live.current.status?.state?.status !== undefined &&
+        live.current.status.state.status !== "ended";
+
       mapDirty = false;
       await reloadSong();
+
+      if (hasActivePerformance) {
+        showArrangementSavedDialog();
+      }
+
     } catch (err) {
       fail(err);
     }
+  }
+
+  function showArrangementSavedDialog() {
+    const dialog = h("dialog", { class: "import" });
+
+    const close = () => {
+      dialog.close();
+      dialog.remove();
+    };
+
+    const endPerformance = async () => {
+      close();
+      await panel.endPerformance();
+    };
+
+    const endAndRestart = async () => {
+      close();
+
+      // Check whether a performance is currently active.
+      const state = live.current.status?.state;
+
+      // If no performance is active, behave like End performance.
+      if (!state || state.status === "ended") {
+        await panel.endPerformance();
+        return;
+      }
+
+      // End the current performance.
+      await panel.endPerformance();
+
+      // Start the updated arrangement.
+      const target = startTarget();
+
+      if (!target?.ready) return;
+
+      await api<LiveStatus>("POST", "/api/session/start", {
+        songId: target.songId,
+        arrangementId: target.arrangementId,
+        performanceKey: target.performanceKey || undefined,
+        controllerId: clientId,
+      })
+        .then((status) => {
+          live.refresh(status);
+        })
+        .catch(fail);
+    };
+
+    mount(
+      dialog,
+      h("h2", null, "Arrangement saved"),
+      h(
+        "p",
+        null,
+        "To broadcast the changes to connected musicians, end and restart the current performance.",
+      ),
+      h(
+        "div",
+        { class: "row wrap end" },
+        h("button", { onclick: close }, "Close"),
+        h(
+          "button",
+          { onclick: () => void endPerformance() },
+          "End performance",
+        ),
+        h(
+          "button",
+          {
+            class: "primary",
+            onclick: () => void endAndRestart(),
+          },
+          "End and restart performance",
+        ),
+      ),
+    );
+
+    dialog.addEventListener("close", () => dialog.remove());
+    document.body.append(dialog);
+    dialog.showModal();
   }
 
   async function newArrangement() {
