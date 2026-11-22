@@ -120,6 +120,16 @@ export function stageView(root: HTMLElement, live: LiveClient): () => void {
   const previousVerse = () => navigateOccurrence(-1);
   const nextVerse = () => navigateOccurrence(1);
 
+  const returnToCurrentVerse = () => {
+    const snap = live.current;
+    const controllerId = snap.status?.state?.currentOccurrenceId;
+
+    if (!controllerId) return;
+
+    localOccurrenceId = controllerId;
+    render(snap);
+  };
+
 
   const top = h("header", { class: "stage-top" });
   const map = sectionMap();
@@ -137,9 +147,17 @@ export function stageView(root: HTMLElement, live: LiveClient): () => void {
 
 
   const onKey = (e: KeyboardEvent) => {
+    if (e.repeat || e.ctrlKey || e.metaKey || e.altKey) return;
+
+    if (e.key === "Enter") {
+      e.preventDefault();
+      returnToCurrentVerse();
+      return;
+    }
+
     const type = CLICKER_KEYS[e.key];
 
-    if (!type || e.repeat || e.ctrlKey || e.metaKey || e.altKey) return;
+    if (!type) return;
 
     // Keyboard navigation is local to this musician's display.
     if (live.isConductor || live.isPairedInput) {
@@ -438,6 +456,17 @@ export function stageView(root: HTMLElement, live: LiveClient): () => void {
           onclick: previousVerse,
         },
         "PREVIOUS",
+      ),
+      h(
+        "button",
+        {
+          class: "stage-return",
+          disabled:
+            !controllerOccurrenceId ||
+            localOccurrenceId === controllerOccurrenceId,
+          onclick: returnToCurrentVerse,
+        },
+        "CURRENT VERSE",
       ),
       h(
         "button",
