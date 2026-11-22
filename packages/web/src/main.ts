@@ -6,6 +6,7 @@ import { controlView } from "./views/control";
 import { musicianView } from "./views/musician";
 import { stageView } from "./views/stage";
 
+
 const root = document.getElementById("app")!;
 const views: Record<ClientRole, (root: HTMLElement, live: LiveClient) => () => void> = {
   control: controlView,
