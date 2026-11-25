@@ -1,4 +1,4 @@
-import { semitoneDistance, transposeChartLine, type ChartLine, type PerformanceState, type SectionOccurrence } from "@setflow/core";
+import { keyAccidental, semitoneDistance, transposeChartLine, type ChartLine, type PerformanceState, type SectionOccurrence } from "@setflow/core";
 import type { LiveStatus, SessionContent } from "@setflow/server/protocol";
 import { h } from "./dom";
 import { largestFit } from "./fit";
@@ -61,6 +61,8 @@ export function liveView(state: PerformanceState | null, content: SessionContent
 export type DisplayMode = "chords" | "lyrics";
 
 export interface RenderOptions {
+  /** Performance key, so chords are spelled to suit it (Bb in F, not A#). */
+  key?: string;
   /** Show `#` comment lines, dimmed. Only the MD's own views do; band displays never show them. */
   showHidden?: boolean;
   /** Default "chords". "lyrics" drops chord rows and chord-only lines. */
@@ -73,7 +75,7 @@ export function renderLines(lines: readonly ChartLine[], semitones: number, opti
   const body = h("div", { class: mode === "lyrics" ? "chart lyrics-mode" : "chart" });
   let shown = 0;
   for (const raw of lines) {
-    const line = transposeChartLine(raw, semitones);
+    const line = transposeChartLine(raw, semitones, options.key ? keyAccidental(options.key) : null);
     switch (line.kind) {
       case "blank":
         // Without chord lines, leave no leading or doubled gaps behind.

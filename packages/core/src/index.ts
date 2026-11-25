@@ -15,7 +15,7 @@ export {
   parseArrangedNotes,
   type ArrangedOptions,
 } from "./arranged.js";
-export { semitoneDistance, transposeChartLine, transposeChord } from "./transpose.js";
+export { keyAccidental, semitoneDistance, transposeChartLine, transposeChord } from "./transpose.js";
 export {
   applyCommand,
   createPerformance,

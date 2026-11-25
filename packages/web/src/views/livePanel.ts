@@ -5,7 +5,8 @@ import { liveView, occurrenceLines, occurrenceText, renderLines, serviceView } f
 import { h, isTyping, mount } from "../dom";
 import type { LiveClient, LiveSnapshot } from "../live";
 
-export const KEYS = ["C", "Db", "D", "Eb", "E", "F", "F#", "G", "Ab", "A", "Bb", "B"];
+/** Every key, with both spellings of the black keys so the MD can choose sharp or flat. */
+export const KEYS = ["C", "C#", "Db", "D", "D#", "Eb", "E", "F", "F#", "Gb", "G", "G#", "Ab", "A", "A#", "Bb", "B"];
 
 /** What the MD can start from: the song and arrangement selected in the library. */
 export interface StartTarget {
@@ -272,7 +273,7 @@ export function livePanel(live: LiveClient, getTarget: () => StartTarget | null,
             ),
             cueEditor(state.cues, conducting, (cues) => void post("/api/session/cues", { controllerId: clientId, cues })),
             view.current
-              ? h("details", { class: "preview", open: true }, h("summary", null, "Current chart"), renderLines(occurrenceLines(snap.content, view.current.occ, view.current.section), view.semitones, { showHidden: true }))
+              ? h("details", { class: "preview", open: true }, h("summary", null, "Current chart"), renderLines(occurrenceLines(snap.content, view.current.occ, view.current.section), view.semitones, { showHidden: true, key: view.key }))
               : null,
             state.liveDeviations.length
               ? h(

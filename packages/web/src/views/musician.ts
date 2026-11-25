@@ -69,7 +69,7 @@ export function musicianView(root: HTMLElement, live: LiveClient): () => void {
                   occ.origin === "live" ? h("span", { class: "tag" }, "live") : null,
                   h("span", { class: "occ-badge" }),
                 ),
-                renderLines(occurrenceLines(snap.content, occ, section), view.semitones),
+                renderLines(occurrenceLines(snap.content, occ, section), view.semitones, { key: view.key }),
               );
             })
           : h("p", { class: "empty" }, snap.status?.recovery ? "Waiting for the MD to resume the performance…" : "Waiting for the MD to start a song…"),

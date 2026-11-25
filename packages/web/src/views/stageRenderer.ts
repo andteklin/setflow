@@ -99,7 +99,7 @@ export function stageRenderer(
               PREVIEW_LINES,
             ),
             view.semitones,
-            { mode: display },
+            { mode: display, key: view.key },
           ),
         )
       : null;
@@ -209,7 +209,7 @@ export function stageRenderer(
               view.current.section,
             ),
             view.semitones,
-            { mode: display },
+            { mode: display, key: view.key },
           ),
         );
       }
