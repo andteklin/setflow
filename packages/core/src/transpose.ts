@@ -19,6 +19,22 @@ export function keyAccidental(key: string): Accidental | null {
   return (m[3] ? FLAT_MINOR : FLAT_MAJOR).has(root) ? "b" : "#";
 }
 
+const SHARP_NAMES = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"];
+const FLAT_NAMES = ["C", "Db", "D", "Eb", "E", "F", "Gb", "G", "Ab", "A", "Bb", "B"];
+
+/**
+ * Respell the root and bass of a chord with the given accidental. Only notes that
+ * already carry an accidental change; naturals stay as they are (never B# or E#).
+ */
+function respell(chord: string, accidental: Accidental): string {
+  const names = accidental === "#" ? SHARP_NAMES : FLAT_NAMES;
+  const note = (n: string, letter: string, acc: string) =>
+    acc ? names[NOTE_SEMITONES[letter + acc]] : n;
+  return chord
+    .replace(/^([A-G])([#b])/, (n, l, a) => note(n, l, a))
+    .replace(/\/([A-G])([#b])/, (n, l, a) => "/" + note(n, l, a));
+}
+
 /**
  * Transpose one chord symbol (e.g. "G/B", "Am7") by a number of semitones.
  * Tokens that aren't chords, such as bar markers ("|"), pass through unchanged.
@@ -26,8 +42,8 @@ export function keyAccidental(key: string): Accidental | null {
 export function transposeChord(chord: string, semitones: number, accidental?: Accidental | null): string {
   if (semitones % 12 === 0 || !chord) return chord;
   try {
-    const moved = ChordSheetJS.Chord.parse(chord)?.transpose(semitones);
-    return (accidental ? moved?.useModifier(accidental) : moved)?.toString() ?? chord;
+    const moved = ChordSheetJS.Chord.parse(chord)?.transpose(semitones)?.toString();
+    return moved === undefined ? chord : accidental ? respell(moved, accidental) : moved;
   } catch {
     return chord;
   }
