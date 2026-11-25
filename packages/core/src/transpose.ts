@@ -1,23 +1,58 @@
 import ChordSheetJS from "chordsheetjs";
 import type { ChartLine } from "./types.js";
 
+export type Accidental = "#" | "b";
+
+const FLAT_MAJOR = new Set(["F", "Bb", "Eb", "Ab", "Db", "Gb", "Cb"]);
+const FLAT_MINOR = new Set(["D", "G", "C", "F", "Bb", "Eb", "Ab"]);
+
+/**
+ * Which accidental a key's chords are spelled with: an explicit "b" or "#" wins;
+ * otherwise the circle of fifths decides (F → flats, so Bb rather than A#).
+ * Null for an unrecognized key.
+ */
+export function keyAccidental(key: string): Accidental | null {
+  const m = /^([A-Ga-g])([#b]?)(m(?!aj))?/.exec(key.trim());
+  if (!m) return null;
+  const root = m[1].toUpperCase();
+  if (m[2]) return m[2] as Accidental;
+  return (m[3] ? FLAT_MINOR : FLAT_MAJOR).has(root) ? "b" : "#";
+}
+
+const SHARP_NAMES = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"];
+const FLAT_NAMES = ["C", "Db", "D", "Eb", "E", "F", "Gb", "G", "Ab", "A", "Bb", "B"];
+
+/**
+ * Respell the root and bass of a chord with the given accidental. Only notes that
+ * already carry an accidental change; naturals stay as they are (never B# or E#).
+ */
+function respell(chord: string, accidental: Accidental): string {
+  const names = accidental === "#" ? SHARP_NAMES : FLAT_NAMES;
+  const note = (n: string, letter: string, acc: string) =>
+    acc ? names[NOTE_SEMITONES[letter + acc]] : n;
+  return chord
+    .replace(/^([A-G])([#b])/, (n, l, a) => note(n, l, a))
+    .replace(/\/([A-G])([#b])/, (n, l, a) => "/" + note(n, l, a));
+}
+
 /**
  * Transpose one chord symbol (e.g. "G/B", "Am7") by a number of semitones.
  * Tokens that aren't chords, such as bar markers ("|"), pass through unchanged.
  */
-export function transposeChord(chord: string, semitones: number): string {
+export function transposeChord(chord: string, semitones: number, accidental?: Accidental | null): string {
   if (semitones % 12 === 0 || !chord) return chord;
   try {
-    return ChordSheetJS.Chord.parse(chord)?.transpose(semitones).toString() ?? chord;
+    const moved = ChordSheetJS.Chord.parse(chord)?.transpose(semitones)?.toString();
+    return moved === undefined ? chord : accidental ? respell(moved, accidental) : moved;
   } catch {
     return chord;
   }
 }
 
 /** Transpose the chords of a chart line. Lyrics, comments and directives are untouched. */
-export function transposeChartLine(line: ChartLine, semitones: number): ChartLine {
+export function transposeChartLine(line: ChartLine, semitones: number, accidental?: Accidental | null): ChartLine {
   if (line.kind !== "music" || semitones % 12 === 0) return line;
-  return { ...line, chords: line.chords.map((c) => ({ ...c, chord: transposeChord(c.chord, semitones) })) };
+  return { ...line, chords: line.chords.map((c) => ({ ...c, chord: transposeChord(c.chord, semitones, accidental) })) };
 }
 
 const NOTE_SEMITONES: Record<string, number> = {

@@ -137,7 +137,7 @@ export function stageView(root: HTMLElement, live: LiveClient): () => void {
       ? h(
           "div",
           { class: "stage-next-preview" },
-          renderLines(previewLines(occurrenceLines(snap.content, view.next.occ, view.next.section), PREVIEW_LINES), view.semitones, { mode: prefs.display }),
+          renderLines(previewLines(occurrenceLines(snap.content, view.next.occ, view.next.section), PREVIEW_LINES), view.semitones, { mode: prefs.display, key: view.key }),
         )
       : null;
     const nextSong = service.nextSong ? h("div", null, h("span", { class: "muted" }, "NEXT SONG: "), service.nextSong.toUpperCase()) : null;
@@ -160,7 +160,7 @@ export function stageView(root: HTMLElement, live: LiveClient): () => void {
         h("span", null, view.current?.section.sourceLabel.toUpperCase() ?? ""),
         view.repetition && !view.vamping ? h("span", { class: "stage-rep" }, view.repetition) : null,
       );
-      if (view.current) chart.append(renderLines(occurrenceLines(snap.content, view.current.occ, view.current.section), view.semitones, { mode: prefs.display }));
+      if (view.current) chart.append(renderLines(occurrenceLines(snap.content, view.current.occ, view.current.section), view.semitones, { mode: prefs.display, key: view.key }));
     }
 
     mount(
