@@ -842,10 +842,13 @@ body[data-view="stage"] {
 
 .stage {
   height: 100vh;
+  height: 100dvh;
   display: flex;
   flex-direction: column;
   padding: 2vh 3vw;
+  padding-bottom: calc(2vh + env(safe-area-inset-bottom, 0px));
   gap: 1vh;
+  overflow: hidden;
 }
 
 .stage-top {
@@ -900,8 +903,8 @@ body[data-view="stage"] {
 
 .stage-chart {
   flex: 1;
-  overflow: hidden;
   min-height: 0;
+  overflow: hidden;
 }
 
 /*
@@ -1360,6 +1363,7 @@ details.midi select {
   align-items: center;
   gap: 16px;
   padding: 12px;
+  flex-shrink: 0;
 }
 
 .stage-navigation button {
