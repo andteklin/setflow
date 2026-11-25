@@ -438,13 +438,38 @@ textarea {
 
 .control-grid {
   display: grid;
-  grid-template-columns: 250px minmax(0, 1fr) 380px;
+  grid-template-columns: 250px minmax(0, 1fr) 8px
+    var(--live-panel-width, 380px);
   min-height: calc(100vh - 48px);
+}
+
+.resize-handle {
+  cursor: col-resize;
+  background: var(--line);
+  position: relative;
+  touch-action: none;
+  transition: background 0.15s;
+}
+
+.resize-handle:hover,
+.resize-handle:active {
+  background: var(--accent);
+}
+
+.resize-handle::after {
+  content: "";
+  position: absolute;
+  inset: 0 -5px;
+  cursor: col-resize;
 }
 
 @media (max-width: 1100px) {
   .control-grid {
     grid-template-columns: 1fr;
+  }
+
+  .resize-handle {
+    display: none;
   }
 }
 

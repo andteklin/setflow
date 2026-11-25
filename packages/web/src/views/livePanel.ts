@@ -231,11 +231,11 @@ export function livePanel(live: LiveClient, getTarget: () => StartTarget | null,
             h(
               "div",
               { class: "transport" },
-              h("button", { disabled: !conducting, onclick: () => void send({ type: "PREVIOUS" }), title: "← or Page Up" }, "◀ PREV"),
-              h("button", { class: "primary next", disabled: !conducting, onclick: () => void send({ type: "NEXT" }), title: "→, Space or Page Down" }, view.status === "ready" ? "START ▶" : "NEXT ▶"),
-              h("button", { disabled: !conducting || view.status !== "active", onclick: () => void send({ type: "REPEAT" }), title: "R" }, "REPEAT"),
-              h("button", { class: view.vamping ? "active" : "", disabled: !conducting || view.status !== "active", onclick: () => void send({ type: "VAMP" }), title: "V" }, "VAMP"),
-              h("button", { class: "danger", disabled: !conducting, onclick: () => confirm("End the performance?") && void send({ type: "END" }), title: "End key" }, "END"),
+              h("button", { disabled: !conducting, onclick: () => void send({ type: "PREVIOUS" }), title: "Move back one verse (← or Page Up)" }, "◀ PREV"),
+              h("button", { class: "primary next", disabled: !conducting, onclick: () => void send({ type: "NEXT" }), title: "Move forward one verse (→, Space or Page Down)" }, view.status === "ready" ? "START ▶" : "NEXT ▶"),
+              h("button", { disabled: !conducting || view.status !== "active", onclick: () => void send({ type: "REPEAT" }), title: "Copy this verse (R)" }, "REPEAT"),
+              h("button", { class: view.vamping ? "active" : "", disabled: !conducting || view.status !== "active", onclick: () => void send({ type: "VAMP" }), title: "Signal to musicians to vamp until cue (V)" }, "VAMP"),
+              h("button", { class: "danger", disabled: !conducting, onclick: () => confirm("End the performance?") && void send({ type: "END" }), title: "Stop the current song (End key)" }, "END"),
             ),
             h("h4", null, "Jump to"),
             h(
@@ -310,7 +310,7 @@ export function livePanel(live: LiveClient, getTarget: () => StartTarget | null,
       transport,
       serviceCard,
       startBox,
-      h("p", { class: "muted small" }, "Keys: → / Space next · ← previous · R repeat · V vamp · 1–0 jump · End to end"),
+      h("p", { class: "muted small" }, "Keys: → / Space next · ← previous · R repeat · V vamp · 1-0 jump · End to end"),
     );
   };
 

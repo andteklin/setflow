@@ -67,13 +67,56 @@ export function controlView(root: HTMLElement, live: LiveClient): () => void {
   const sidebar = h("nav", { class: "library" });
   const center = h("section", { class: "song-panel" });
   const panel = livePanel(live, startTarget, () => {
-    const s = currentSetlist();
-    return s ? { setlistId: s.id, name: s.name, count: s.items.length } : null;
+      const s = currentSetlist();
+      return s ? { setlistId: s.id, name: s.name, count: s.items.length } : null;
+    });
+    const midi = midiPanel(live);
+    const inputs = inputsPanel(live);
+    const stage = stageRenderer("chords");
+    const controlGrid = h(
+    "div",
+    { class: "control-grid" },
+    sidebar,
+    center,
+    h("div", { class: "resize-handle", title: "Drag to resize control panel" }),
+    h("aside", { class: "live-panel" }, panel.el, inputs.el, midi.el),
+  );
+
+  const resizeHandle = controlGrid.querySelector<HTMLElement>(".resize-handle")!;
+
+  let resizing = false;
+
+  resizeHandle.addEventListener("pointerdown", (e: PointerEvent) => {
+    e.preventDefault();
+
+    resizing = true;
+    resizeHandle.setPointerCapture(e.pointerId);
+    document.body.style.cursor = "col-resize";
+    document.body.style.userSelect = "none";
   });
-  const midi = midiPanel(live);
-  const inputs = inputsPanel(live);
-  const stage = stageRenderer("chords");
-  mount(root, header, h("div", { class: "control-grid" }, sidebar, center, h("aside", { class: "live-panel" }, panel.el, inputs.el, midi.el)));
+
+  resizeHandle.addEventListener("pointermove", (e: PointerEvent) => {
+    if (!resizing) return;
+
+    const rect = controlGrid.getBoundingClientRect();
+    const width = rect.right - e.clientX;
+
+    const maxWidth = window.innerWidth * 0.5;
+    const panelWidth = Math.max(280, Math.min(maxWidth, width));
+
+    controlGrid.style.setProperty("--live-panel-width", `${panelWidth}px`);
+  });
+
+  const stopResize = () => {
+    resizing = false;
+    document.body.style.cursor = "";
+    document.body.style.userSelect = "";
+  };
+
+  resizeHandle.addEventListener("pointerup", stopResize);
+  resizeHandle.addEventListener("pointercancel", stopResize);
+
+  mount(root, header, controlGrid);
 
   function arrangement(): ArrangementView | undefined {
     return detail?.arrangements.find((a) => a.id === arrangementId);
