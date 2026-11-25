@@ -3,18 +3,20 @@ import type {
   ArrangementView,
   HostInfo,
   ImportPreview,
+  LiveStatus,
   SetlistItem,
   SetlistRecord,
   SongDetail,
   SongSummary,
 } from "@setflow/server/protocol";
-import { api } from "../api";
+import { api, clientId } from "../api";
 import { h, load, mount, save } from "../dom";
 import { insertAt, isNoOpMove, moveTo, trackDrag } from "../drag";
 import type { LiveClient } from "../live";
 import { KEYS, livePanel, type StartTarget } from "./livePanel";
 import { inputsPanel } from "./inputsPanel";
 import { midiPanel } from "./midiPanel";
+import { stageRenderer } from "./stageRenderer";
 
 interface DraftItem {
   token: string;
@@ -54,7 +56,7 @@ export function controlView(root: HTMLElement, live: LiveClient): () => void {
   let sourceDirty = false;
   /** Unsaved comment edits in the Arranged ChordPro tab (issue #9). */
   let arrangedDirty = false;
-  let tab: "map" | "arranged" | "source" = load("setflow.control.tab", "map");
+  let tab: "map" | "arranged" | "source" | "stage" = load("setflow.control.tab", "map");
   let setlistId: string | null = load("setflow.control.setlist", null);
   /** The setlist entry last clicked, whose arrangement and key can be changed in place (issue #6). */
   let editingItemId: string | null = null;
@@ -70,6 +72,7 @@ export function controlView(root: HTMLElement, live: LiveClient): () => void {
   });
   const midi = midiPanel(live);
   const inputs = inputsPanel(live);
+  const stage = stageRenderer("chords");
   mount(root, header, h("div", { class: "control-grid" }, sidebar, center, h("aside", { class: "live-panel" }, panel.el, inputs.el, midi.el)));
 
   function arrangement(): ArrangementView | undefined {
@@ -319,6 +322,12 @@ export function controlView(root: HTMLElement, live: LiveClient): () => void {
     await loadLibrary();
   }
 
+  function renderStageView(): HTMLElement {
+    // Always render the latest authoritative snapshot.
+    stage.render(live.current);
+    return stage.el;
+  }
+
   // Center: song detail, Song Map editor and source editor
 
   function renderCenter() {
@@ -347,10 +356,17 @@ export function controlView(root: HTMLElement, live: LiveClient): () => void {
         "div",
         { class: "tabs" },
         h("button", { class: tab === "map" ? "active" : "", onclick: () => setTab("map") }, "Song Map"),
+        h("button", { class: tab === "stage" ? "active" : "", onclick: () => setTab("stage"), }, "Stage View"),
         h("button", { class: tab === "arranged" ? "active" : "", onclick: () => setTab("arranged") }, "Arranged ChordPro"),
         h("button", { class: tab === "source" ? "active" : "", onclick: () => setTab("source") }, "ChordPro source"),
       ),
-      tab === "map" ? renderMapEditor() : tab === "arranged" ? renderArrangedEditor() : renderSourceEditor(),
+      tab === "map"
+      ? renderMapEditor()
+      : tab === "arranged"
+        ? renderArrangedEditor()
+        : tab === "source"
+          ? renderSourceEditor()
+          : renderStageView(),
     );
   }
 
@@ -460,7 +476,7 @@ export function controlView(root: HTMLElement, live: LiveClient): () => void {
       );
       mount(
         editor,
-        h("h4", null, "Available sections ", h("span", { class: "muted small" }, "click to add at the end, or drag into place")),
+        h("h4", null, "Available sections ", h("span", { class: "muted small" }, "(click to add at the end)")),
         h(
           "div",
           { class: "palette" },
@@ -478,7 +494,7 @@ export function controlView(root: HTMLElement, live: LiveClient): () => void {
             ),
           ),
         ),
-        h("h4", null, "Arrangement ", h("span", { class: "muted small" }, "drag to reorder")),
+        h("h4", null, "Arrangement ", h("span", { class: "muted small" }, "(drag to reorder)")),
         draft.length === 0 ? h("p", { class: "muted" }, "Empty — click or drag sections here.") : null,
         rows,
         h("label", { class: "stack" }, "Song map ", textInput, textError),
@@ -536,6 +552,8 @@ export function controlView(root: HTMLElement, live: LiveClient): () => void {
     return view;
   }
 
+
+
   async function saveMap() {
     const a = arrangement();
     if (!a) return;
@@ -544,11 +562,99 @@ export function controlView(root: HTMLElement, live: LiveClient): () => void {
     const notes = draft.flatMap((d, item) => d.notes.filter((n) => n.repetition < d.repetitions).map((n) => ({ ...n, item })));
     try {
       await api("PUT", `/api/arrangements/${a.id}`, { songMap, notes, performanceKey: draftKey || null, expectedRevision: a.revision });
+
+      const hasActivePerformance =
+        live.current.status?.state?.status !== undefined &&
+        live.current.status.state.status !== "ended";
+
       mapDirty = false;
       await reloadSong();
+
+      if (hasActivePerformance) {
+        showArrangementSavedDialog();
+      }
+
     } catch (err) {
       fail(err);
     }
+  }
+
+  function showArrangementSavedDialog() {
+    const dialog = h("dialog", { class: "import" });
+
+    const close = () => {
+      dialog.close();
+      dialog.remove();
+    };
+
+    const endPerformance = async () => {
+      close();
+      await panel.endPerformance();
+    };
+
+    const endAndRestart = async () => {
+      close();
+
+      // Check whether a performance is currently active.
+      const state = live.current.status?.state;
+
+      // If no performance is active, behave like End performance.
+      if (!state || state.status === "ended") {
+        await panel.endPerformance();
+        return;
+      }
+
+      // End the current performance.
+      await panel.endPerformance();
+
+      // Start the updated arrangement.
+      const target = startTarget();
+
+      if (!target?.ready) return;
+
+      await api<LiveStatus>("POST", "/api/session/start", {
+        songId: target.songId,
+        arrangementId: target.arrangementId,
+        performanceKey: target.performanceKey || undefined,
+        controllerId: clientId,
+      })
+        .then((status) => {
+          live.refresh(status);
+        })
+        .catch(fail);
+    };
+
+    mount(
+      dialog,
+      h("h2", null, "Arrangement saved"),
+      h(
+        "p",
+        null,
+        "To broadcast the changes to connected musicians, end and restart the current performance.",
+      ),
+      h(
+        "div",
+        { class: "row wrap end" },
+        h("button", { onclick: close }, "Close"),
+        h(
+          "button",
+          { onclick: () => void endPerformance() },
+          "End performance",
+        ),
+        h(
+          "button",
+          {
+            class: "primary",
+            onclick: () => void endAndRestart(),
+          },
+          "End and restart performance",
+        ),
+      ),
+    );
+
+    dialog.addEventListener("close", () => dialog.remove());
+    document.body.append(dialog);
+    dialog.showModal();
   }
 
   async function newArrangement() {
@@ -767,7 +873,10 @@ export function controlView(root: HTMLElement, live: LiveClient): () => void {
     void loadLibrary();
     if (detail && !mapDirty && !sourceDirty && !arrangedDirty) void reloadSong().catch(() => { detail = null; renderCenter(); });
   });
-  const unsubscribeLive = live.subscribe(renderHeader);
+  const unsubscribeLive = live.subscribe(() => {
+    renderHeader();
+    stage.render(live.current);
+  });
   const beforeUnload = (e: BeforeUnloadEvent) => {
     if (mapDirty || sourceDirty || arrangedDirty) e.preventDefault();
   };
@@ -779,9 +888,14 @@ export function controlView(root: HTMLElement, live: LiveClient): () => void {
   return () => {
     unsubscribeLibrary();
     unsubscribeLive();
+
     panel.dispose();
     midi.dispose();
     inputs.dispose();
+
+    // Release the Stage renderer's resize listener and pending animation frame.
+    stage.dispose();
+
     window.removeEventListener("beforeunload", beforeUnload);
   };
 }

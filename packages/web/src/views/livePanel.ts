@@ -319,6 +319,12 @@ export function livePanel(live: LiveClient, getTarget: () => StartTarget | null,
   return {
     el,
     refresh: () => render(live.current),
+
+    // Use the same command as the existing END button.
+    endPerformance: async () => {
+      await send({ type: "END" });
+    },
+
     dispose: () => {
       unsubscribe();
       window.removeEventListener("keydown", onKey);
