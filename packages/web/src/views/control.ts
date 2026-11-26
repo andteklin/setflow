@@ -75,6 +75,96 @@ export function controlView(root: HTMLElement, live: LiveClient): () => void {
   const stage = stageRenderer("chords");
   mount(root, header, h("div", { class: "control-grid" }, sidebar, center, h("aside", { class: "live-panel" }, panel.el, inputs.el, midi.el)));
 
+  // Resizable live control panel
+  const controlGrid = root.querySelector<HTMLElement>(".control-grid")!;
+  const livePanelElement = root.querySelector<HTMLElement>(".live-panel")!;
+
+  const MIN_PANEL_WIDTH = 320;
+  const MAX_PANEL_WIDTH = 850;
+  const DEFAULT_PANEL_WIDTH = 380;
+
+  let panelWidth = Number(
+    localStorage.getItem("setflow.control.panelWidth")
+  ) || DEFAULT_PANEL_WIDTH;
+
+  panelWidth = Math.max(
+    MIN_PANEL_WIDTH,
+    Math.min(MAX_PANEL_WIDTH, panelWidth)
+  );
+
+  const resizeHandle = h("div", {
+    class: "live-panel-resize",
+    title: "Drag to resize control panel",
+    role: "separator",
+    "aria-orientation": "vertical",
+    "aria-label": "Resize control panel",
+  });
+
+  livePanelElement.append(resizeHandle);
+
+  function applyPanelWidth() {
+    controlGrid.style.setProperty(
+      "--live-panel-width",
+      `${panelWidth}px`
+    );
+
+    resizeHandle.setAttribute(
+      "aria-valuenow",
+      String(panelWidth)
+    );
+  }
+
+  applyPanelWidth();
+
+  let resizing = false;
+  let startX = 0;
+  let startWidth = 0;
+
+  resizeHandle.addEventListener("pointerdown", (e: PointerEvent) => {
+    if (e.button !== 0 && e.pointerType === "mouse") return;
+
+    resizing = true;
+    startX = e.clientX;
+    startWidth = panelWidth;
+
+    resizeHandle.classList.add("dragging");
+    document.body.classList.add("resizing-panel");
+
+    resizeHandle.setPointerCapture(e.pointerId);
+    e.preventDefault();
+  });
+
+  resizeHandle.addEventListener("pointermove", (e: PointerEvent) => {
+    if (!resizing) return;
+
+    // Dragging left expands the right-hand panel.
+    const delta = startX - e.clientX;
+
+    panelWidth = Math.max(
+      MIN_PANEL_WIDTH,
+      Math.min(MAX_PANEL_WIDTH, startWidth + delta)
+    );
+
+    applyPanelWidth();
+  });
+
+  function stopPanelResize() {
+    if (!resizing) return;
+
+    resizing = false;
+
+    resizeHandle.classList.remove("dragging");
+    document.body.classList.remove("resizing-panel");
+
+    localStorage.setItem(
+      "setflow.control.panelWidth",
+      String(panelWidth)
+    );
+  }
+
+  resizeHandle.addEventListener("pointerup", stopPanelResize);
+  resizeHandle.addEventListener("pointercancel", stopPanelResize);
+
   function arrangement(): ArrangementView | undefined {
     return detail?.arrangements.find((a) => a.id === arrangementId);
   }
@@ -895,6 +985,8 @@ export function controlView(root: HTMLElement, live: LiveClient): () => void {
 
     // Release the Stage renderer's resize listener and pending animation frame.
     stage.dispose();
+
+    document.body.classList.remove("resizing-panel");
 
     window.removeEventListener("beforeunload", beforeUnload);
   };

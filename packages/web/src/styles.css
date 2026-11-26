@@ -442,14 +442,80 @@ textarea {
 }
 
 .control-grid {
+  --live-panel-width: 380px;
+
   display: grid;
-  grid-template-columns: 250px minmax(0, 1fr) 380px;
+  grid-template-columns:
+    250px
+    minmax(0, 1fr)
+    var(--live-panel-width);
+
   min-height: calc(100vh - 48px);
 }
 
 @media (max-width: 1100px) {
   .control-grid {
     grid-template-columns: 1fr;
+  }
+}
+
+/* Resizable live control panel */
+
+.live-panel {
+  position: relative;
+  min-width: 0;
+  border-left: 1px solid var(--line);
+  background: var(--panel);
+}
+
+/* Drag handle on the left edge of the control panel */
+
+.live-panel-resize {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: -5px;
+  width: 10px;
+  z-index: 20;
+
+  cursor: col-resize;
+  touch-action: none;
+  user-select: none;
+}
+
+/* Visible hover indicator */
+
+.live-panel-resize::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 4px;
+  width: 2px;
+  background: transparent;
+  transition: background 0.15s;
+}
+
+.live-panel-resize:hover::after,
+.live-panel-resize.dragging::after {
+  background: var(--accent);
+}
+
+body.resizing-panel,
+body.resizing-panel * {
+  cursor: col-resize !important;
+  user-select: none !important;
+}
+
+/* Mobile layout */
+
+@media (max-width: 1100px) {
+  .control-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .live-panel-resize {
+    display: none;
   }
 }
 
