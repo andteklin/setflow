@@ -17,6 +17,7 @@ export function musicianView(root: HTMLElement, live: LiveClient): () => void {
   const prefs = load<Prefs>("setflow.musician", { zoom: 1, theme: "dark" });
   let following = true;
   let renderedFor = "";
+  let lastCurrentOccurrenceId: string | null = null;
 
   const toolbar = h("header", { class: "musician-bar" });
   const list = h("main", { class: "musician-chart" });
@@ -29,10 +30,33 @@ export function musicianView(root: HTMLElement, live: LiveClient): () => void {
   };
 
   const followCurrent = (smooth: boolean) => {
-    // The sticky bar wraps on phones; keep the current heading clear of it.
-    document.documentElement.style.setProperty("--bar-height", `${toolbar.offsetHeight}px`);
-    const el = list.querySelector<HTMLElement>(".occurrence.current") ?? list.querySelector<HTMLElement>(".occurrence.next");
-    el?.scrollIntoView({ block: "start", behavior: smooth ? "smooth" : "auto" });
+    const el =
+      list.querySelector<HTMLElement>(".occurrence.current") ??
+      list.querySelector<HTMLElement>(".occurrence.next");
+
+    if (!el) {
+      return;
+    }
+
+    const scrollRoot = document.scrollingElement as HTMLElement;
+    const barHeight = toolbar.getBoundingClientRect().height;
+
+    document.documentElement.style.setProperty(
+      "--bar-height",
+      `${barHeight}px`,
+    );
+
+    const before = {
+      scrollTop: scrollRoot.scrollTop,
+      targetTop: el.getBoundingClientRect().top,
+      barHeight,
+    };
+
+    el.scrollIntoView({
+      behavior: "instant",
+      block: "start",
+      inline: "nearest",
+    });
   };
 
   const stopFollowing = () => {
@@ -40,7 +64,8 @@ export function musicianView(root: HTMLElement, live: LiveClient): () => void {
     following = false;
     render(live.current);
   };
-  for (const type of ["wheel", "touchmove"]) list.addEventListener(type, stopFollowing, { passive: true });
+  window.addEventListener("wheel", stopFollowing, { passive: true });
+  window.addEventListener("touchmove", stopFollowing, { passive: true });
   const onKey = (e: KeyboardEvent) => {
     if (["ArrowUp", "ArrowDown", "PageUp", "PageDown", "Home", "End", " "].includes(e.key)) stopFollowing();
   };
@@ -94,28 +119,77 @@ export function musicianView(root: HTMLElement, live: LiveClient): () => void {
               ? `Ended · next song: ${service.nextSong}`
               : "Ended"
             : "No song";
-    mount(
-      toolbar,
-      h(
-        "div",
-        { class: "bar-title" },
-        h("strong", null, snap.content?.title ?? "SetFlow"),
-        view.key ? h("span", { class: "key-pill" }, view.key) : null,
-        service.position ? h("span", { class: "muted small" }, service.position) : null,
-      ),
-      h("div", { class: snap.connected ? "live-pill" : "live-pill stale" }, snap.connected ? "● LIVE " : "○ Disconnected — last known: ", liveText),
-      following
-        ? null
-        : h("button", { class: "primary", onclick: () => { following = true; render(live.current); followCurrent(true); } }, "Return to Live"),
-      h(
-        "div",
-        { class: "bar-tools" },
-        h("button", { title: "Smaller", onclick: () => { prefs.zoom = Math.max(0.6, +(prefs.zoom - 0.1).toFixed(2)); applyPrefs(); } }, "A−"),
-        h("button", { title: "Larger", onclick: () => { prefs.zoom = Math.min(2.5, +(prefs.zoom + 0.1).toFixed(2)); applyPrefs(); } }, "A+"),
-        h("button", { title: "Light/dark", onclick: () => { prefs.theme = prefs.theme === "dark" ? "light" : "dark"; applyPrefs(); } }, prefs.theme === "dark" ? "☀" : "☾"),
-      ),
-    );
-    if (following) requestAnimationFrame(() => followCurrent(true));
+      mount(
+        toolbar,
+        h(
+          "div",
+          { class: "musician-bar-main" },
+          h(
+            "div",
+            { class: "bar-title" },
+            h("strong", null, snap.content?.title ?? "SetFlow"),
+            view.key ? h("span", { class: "key-pill" }, view.key) : null,
+            service.position ? h("span", { class: "muted small" }, service.position) : null,
+          ),
+          h(
+            "div",
+            { class: snap.connected ? "live-pill" : "live-pill stale" },
+            snap.connected ? "● LIVE " : "○ Disconnected — last known: ", liveText,
+          ),
+          following
+            ? null
+            : h("button", {
+                class: "primary",
+                onclick: () => {
+                  following = true;
+                  render(live.current);
+                  followCurrent(true);
+                },
+              }, "Return to Current Verse"),
+          h(
+            "div",
+            { class: "bar-tools" },
+            h("button", {
+              title: "Smaller",
+              onclick: () => {
+                prefs.zoom = Math.max(0.6, +(prefs.zoom - 0.1).toFixed(2));
+                applyPrefs();
+              },
+            }, "A-"),
+            h("button", {
+              title: "Larger",
+              onclick: () => {
+                prefs.zoom = Math.min(2.5, +(prefs.zoom + 0.1).toFixed(2));
+                applyPrefs();
+              },
+            }, "A+"),
+            h("button", {
+              title: "Light/dark",
+              onclick: () => {
+                prefs.theme = prefs.theme === "dark" ? "light" : "dark";
+                applyPrefs();
+              },
+            }, "☀"),
+          ),
+        ),
+        state?.cues.length
+          ? h(
+              "div",
+              { class: "musician-cues" },
+              state.cues.join(" · "),
+            )
+          : null,
+      );
+    const currentOccurrenceId = state?.currentOccurrenceId ?? null;
+
+    const occurrenceChanged =
+      currentOccurrenceId !== lastCurrentOccurrenceId;
+
+    lastCurrentOccurrenceId = currentOccurrenceId;
+
+    if (following && occurrenceChanged) {
+      followCurrent(true);
+    }
   };
 
   applyPrefs();
@@ -123,6 +197,8 @@ export function musicianView(root: HTMLElement, live: LiveClient): () => void {
   return () => {
     unsubscribe();
     window.removeEventListener("keydown", onKey);
+    window.removeEventListener("wheel", stopFollowing);
+    window.removeEventListener("touchmove", stopFollowing);
     delete document.documentElement.dataset.theme;
   };
 }
