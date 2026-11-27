@@ -73,6 +73,11 @@ body {
   color: var(--text);
   font-family: var(--sans);
   font-size: 15px;
+  min-height: 100%;
+}
+
+html {
+  scroll-behavior: auto !important;
 }
 
 h1,
@@ -437,14 +442,80 @@ textarea {
 }
 
 .control-grid {
+  --live-panel-width: 380px;
+
   display: grid;
-  grid-template-columns: 250px minmax(0, 1fr) 380px;
+  grid-template-columns:
+    250px
+    minmax(0, 1fr)
+    var(--live-panel-width);
+
   min-height: calc(100vh - 48px);
 }
 
 @media (max-width: 1100px) {
   .control-grid {
     grid-template-columns: 1fr;
+  }
+}
+
+/* Resizable live control panel */
+
+.live-panel {
+  position: relative;
+  min-width: 0;
+  border-left: 1px solid var(--line);
+  background: var(--panel);
+}
+
+/* Drag handle on the left edge of the control panel */
+
+.live-panel-resize {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: -5px;
+  width: 10px;
+  z-index: 20;
+
+  cursor: col-resize;
+  touch-action: none;
+  user-select: none;
+}
+
+/* Visible hover indicator */
+
+.live-panel-resize::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 4px;
+  width: 2px;
+  background: transparent;
+  transition: background 0.15s;
+}
+
+.live-panel-resize:hover::after,
+.live-panel-resize.dragging::after {
+  background: var(--accent);
+}
+
+body.resizing-panel,
+body.resizing-panel * {
+  cursor: col-resize !important;
+  user-select: none !important;
+}
+
+/* Mobile layout */
+
+@media (max-width: 1100px) {
+  .control-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .live-panel-resize {
+    display: none;
   }
 }
 
@@ -456,16 +527,35 @@ textarea {
 }
 
 .song-panel > .stage {
-  height: auto;
-  min-height: 500px;
+  height: min(700px, calc(100vh - 180px));
+  min-height: 300px;
   max-height: calc(100vh - 180px);
   padding: 1rem;
   gap: 0.75rem;
-  overflow: auto;
+  overflow: hidden;
+  min-width: 0;
 }
 
 .song-panel > .stage .stage-current {
   font-size: clamp(2rem, 5vh, 5rem);
+}
+
+.song-panel > .stage > .stage-body {
+  min-height: 0;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.song-panel > .stage > .stage-body > .stage-main {
+  min-height: 0;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.song-panel > .stage .stage-chart {
+  min-height: 0;
+  min-width: 0;
+  overflow: hidden;
 }
 
 
@@ -845,12 +935,19 @@ body[data-view="stage"] {
   overflow: hidden;
 }
 
+/* body[data-view="musician"] {
+  overflow-x: hidden;
+} */
+
 .stage {
   height: 100vh;
+  height: 100dvh;
   display: flex;
   flex-direction: column;
   padding: 2vh 3vw;
+  padding-bottom: calc(2vh + env(safe-area-inset-bottom, 0px));
   gap: 1vh;
+  overflow: hidden;
 }
 
 .stage-top {
@@ -905,8 +1002,8 @@ body[data-view="stage"] {
 
 .stage-chart {
   flex: 1;
-  overflow: hidden;
   min-height: 0;
+  overflow: hidden;
 }
 
 /*
@@ -1125,14 +1222,36 @@ body[data-view="stage"] {
 .musician-bar {
   position: sticky;
   top: 0;
-  z-index: 2;
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.5rem 1rem;
-  align-items: center;
-  padding: 0.5rem 16px;
+  z-index: 100;
+  width: 100%;
   background: var(--panel);
-  border-bottom: 1px solid var(--line);
+}
+
+.musician-bar-main {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+
+.musician-cues {
+  padding: 0.45rem 0.75rem;
+  text-align: center;
+  font-weight: 700;
+  color: #000;
+  background: var(--current-line);
+  border-radius: 6px;
+  line-height: 1.4;
+}
+
+.musician-chart {
+  scroll-padding-top: 1rem;
+  overflow: visible;
+}
+
+.musician-chart .occurrence {
+  scroll-margin-top: calc(var(--bar-height, 0px) + 0.5rem);
 }
 
 .bar-title {
@@ -1329,4 +1448,46 @@ details.midi select {
   list-style: none;
   padding: 0;
   margin: 0.3rem 0;
+}
+
+.stage {
+  position: relative;
+}
+
+
+
+.stage-navigation {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 16px;
+  padding: 12px;
+  flex-shrink: 0;
+}
+
+.stage-navigation button {
+  background: #252525;
+  color: #fff;
+  border: 1px solid #555;
+  border-radius: 8px;
+  padding: 12px 28px;
+  font-size: 1rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s;
+}
+
+.stage-navigation button:hover:not(:disabled) {
+  background: #444;
+  border-color: #888;
+}
+
+.stage-navigation button:active:not(:disabled) {
+  background: #555;
+}
+
+.stage-navigation button:disabled {
+  opacity: 0.3;
+  cursor: not-allowed;
 }
