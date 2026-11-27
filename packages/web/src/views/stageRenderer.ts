@@ -50,6 +50,27 @@ export function stageRenderer(
   const body = h("div", { class: "stage-body" });
   const screen = h("div", { class: "stage" }, top, map.el, body);
 
+  function fitChartText() {
+    if (!chartElement || disposed) return;
+
+    if (chartElement.clientHeight === 0 || chartElement.clientWidth === 0) {
+      return;
+    }
+
+    fitText(
+      chartElement,
+      Math.round(chartElement.clientHeight / 7),
+      14,
+    );
+  }
+  let chartElement: HTMLElement | null = null;
+  const resizeObserver = new ResizeObserver(() => {
+    if (chartElement) {
+      fitChartText();
+    }
+  });
+
+
   let disposed = false;
   let resizeFrame = 0;
 
@@ -165,6 +186,8 @@ export function stageRenderer(
 
     // Current section and lyrics chart.
     const chart = h("div", { class: "stage-chart" });
+    chartElement = chart;
+    resizeObserver.observe(chart);
 
     let heading: HTMLElement;
 
@@ -253,17 +276,11 @@ export function stageRenderer(
     // Fit the lyrics to the available chart area.
     if (resizeFrame) cancelAnimationFrame(resizeFrame);
 
-    resizeFrame = requestAnimationFrame(() => {
+   resizeFrame = requestAnimationFrame(() => {
       resizeFrame = 0;
       if (disposed || !screen.isConnected) return;
 
-      if (chart.clientHeight === 0 || chart.clientWidth === 0) return;
-
-      fitText(
-        chart,
-        Math.round(chart.clientHeight / 7),
-        14,
-      );
+      fitChartText();
     });
   };
 
@@ -288,6 +305,7 @@ export function stageRenderer(
       disposed = true;
 
       window.removeEventListener("resize", onResize);
+      resizeObserver.disconnect();
 
       if (resizeFrame) {
         cancelAnimationFrame(resizeFrame);
